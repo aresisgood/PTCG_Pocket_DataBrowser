@@ -43,11 +43,11 @@ function fillSelect(id, values, allLabel) {
     values.map((v) => `<option value="${v}">${v}</option>`).join('');
 }
 function buildFilters() {
-  fillSelect('f-set', uniqueSorted('set_id'), 'All sets');
-  fillSelect('f-type', ['pokemon', 'trainer'], 'All types');
-  fillSelect('f-element', uniqueSorted('element'), 'All elements');
-  fillSelect('f-rarity', uniqueSorted('rarity'), 'All rarities');
-  fillSelect('f-pack', uniqueSorted('pack'), 'All packs');
+  fillSelect('f-set', uniqueSorted('set_id'), '全部卡包');
+  fillSelect('f-type', ['pokemon', 'trainer'], '全部種類');
+  fillSelect('f-element', uniqueSorted('element'), '全部屬性');
+  fillSelect('f-rarity', uniqueSorted('rarity'), '全部稀有度');
+  fillSelect('f-pack', uniqueSorted('pack'), '全部卡包系列');
 }
 
 // --- 篩選 + 排序 -------------------------------------------------------------

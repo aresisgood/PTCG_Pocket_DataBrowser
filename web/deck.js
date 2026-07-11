@@ -21,19 +21,43 @@ async function load() {
   }
   state.byId = Object.fromEntries(state.cards.map((c) => [cardId(c), c]));
   el('status').textContent = `${state.cards.length} 張卡`;
-  renderPicker('');
+  buildFilters();
+  applyPicker();
   renderDeck();
   loadSavedDecks();
   loadMeta();
   bindEvents();
 }
 
+// --- 篩選選項清單 ------------------------------------------------------------
+function uniqueSorted(key) {
+  return [...new Set(state.cards.map((c) => c[key]).filter(Boolean))].sort();
+}
+function fillSelect(id, options, allLabel) {
+  el(id).innerHTML = `<option value="">${allLabel}</option>` +
+    options.map(([v, label]) => `<option value="${v}">${escapeHtml(label)}</option>`).join('');
+}
+function buildFilters() {
+  const pair = (v) => [v, v];
+  fillSelect('f-set', uniqueSorted('set_id').map(pair), '全部卡包');
+  fillSelect('f-type', [['pokemon', '寶可夢'], ['trainer', '訓練家']], '全部種類');
+  fillSelect('f-element', uniqueSorted('element').map(pair), '全部屬性');
+  fillSelect('f-rarity', uniqueSorted('rarity').map(pair), '全部稀有度');
+  fillSelect('f-pack', uniqueSorted('pack').map(pair), '全部系列');
+}
+
 // --- 卡庫 picker -------------------------------------------------------------
-function renderPicker(query) {
-  const q = query.trim().toLowerCase();
-  const list = (q
-    ? state.cards.filter((c) => c.name.toLowerCase().includes(q))
-    : state.cards
+function applyPicker() {
+  const q = el('search').value.trim().toLowerCase();
+  const fSet = el('f-set').value, fType = el('f-type').value;
+  const fEl = el('f-element').value, fRar = el('f-rarity').value, fPack = el('f-pack').value;
+  const list = state.cards.filter((c) =>
+    (!fSet || c.set_id === fSet) &&
+    (!fType || c.card_type === fType) &&
+    (!fEl || c.element === fEl) &&
+    (!fRar || c.rarity === fRar) &&
+    (!fPack || c.pack === fPack) &&
+    (!q || c.name.toLowerCase().includes(q))
   ).slice(0, 120);
   const grid = el('picker-grid');
   grid.innerHTML = '';
@@ -242,7 +266,14 @@ function flash(btn, text) {
   setTimeout(() => { btn.textContent = old; }, 1200);
 }
 function bindEvents() {
-  el('search').addEventListener('input', debounce((e) => renderPicker(e.target.value), 150));
+  el('search').addEventListener('input', debounce(applyPicker, 150));
+  ['f-set', 'f-type', 'f-element', 'f-rarity', 'f-pack']
+    .forEach((id) => el(id).addEventListener('change', applyPicker));
+  el('f-reset').addEventListener('click', () => {
+    el('search').value = '';
+    ['f-set', 'f-type', 'f-element', 'f-rarity', 'f-pack'].forEach((id) => (el(id).value = ''));
+    applyPicker();
+  });
   el('btn-save').addEventListener('click', saveDeck);
   el('btn-new').addEventListener('click', newDeck);
   el('btn-predict').addEventListener('click', predict);

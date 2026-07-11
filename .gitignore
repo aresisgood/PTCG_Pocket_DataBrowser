@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# 爬蟲工作檔（保留權威的 data/cards.json 與 data/analysis.json）
+data/cards.checkpoint.json
+data/failed_urls.json
+data/scrape_full.log
+data/collect.log
+
+# 賽事原始中繼資料（大檔;analysis.json 才是服務用成品）
+data/tournaments/
+
+# 牌組實驗室的本機資料庫(使用者自己的牌組)
+data/decks.db
+
+# 本地開發工具設定（Claude Code），不進版本控制
+.claude/

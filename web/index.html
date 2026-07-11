@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PTCG Pocket Card Browser</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="header-row">
+      <h1><span class="dot"></span> PTCG Pocket Cards</h1>
+      <a href="deck.html" class="nav-link">牌組實驗室 →</a>
+      <input id="search" class="search" type="search"
+             placeholder="Search by name, attack, ability…" autocomplete="off" />
+      <span id="count" class="count"></span>
+    </div>
+    <div class="filters">
+      <div><label for="f-set">Set</label><select id="f-set"></select></div>
+      <div><label for="f-type">Type</label><select id="f-type"></select></div>
+      <div><label for="f-element">Element</label><select id="f-element"></select></div>
+      <div><label for="f-rarity">Rarity</label><select id="f-rarity"></select></div>
+      <div><label for="f-pack">Pack</label><select id="f-pack"></select></div>
+      <div><label for="f-sort">Sort</label>
+        <select id="f-sort">
+          <option value="default">Set &amp; number</option>
+          <option value="name">Name (A–Z)</option>
+          <option value="hp-desc">HP (high→low)</option>
+          <option value="hp-asc">HP (low→high)</option>
+        </select>
+      </div>
+      <button id="reset" class="reset">Reset</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="status" class="loading">Loading cards…</div>
+    <div id="grid" class="grid" role="list"></div>
+    <div id="sentinel"></div>
+  </main>
+
+  <div id="modal-backdrop" class="modal-backdrop" hidden>
+    <div class="modal" id="modal" role="dialog" aria-modal="true">
+      <button class="modal-close" id="modal-close" aria-label="Close">×</button>
+      <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

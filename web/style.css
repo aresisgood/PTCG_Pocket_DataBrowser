@@ -1,0 +1,140 @@
+/* PTCG Pocket 卡牌瀏覽器 — 自包含樣式,支援深淺色。 */
+:root {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #eceef1;
+  --text: #1c2024;
+  --text-dim: #667085;
+  --border: #dfe3e8;
+  --accent: #d6303a;
+  --shadow: 0 1px 3px rgba(16, 24, 40, .08), 0 1px 2px rgba(16, 24, 40, .06);
+  --radius: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a; --surface: #1d2026; --surface-2: #262a31;
+    --text: #e7eaee; --text-dim: #9aa3af; --border: #2e333c;
+    --shadow: 0 1px 3px rgba(0, 0, 0, .4);
+  }
+}
+
+/* 能量 / 屬性強調色。 */
+.type-Grass    { --type: #63bb5b; }
+.type-Fire     { --type: #e8564f; }
+.type-Water    { --type: #4a9ee6; }
+.type-Lightning{ --type: #f2c94c; }
+.type-Psychic  { --type: #b46fc9; }
+.type-Fighting { --type: #c9773f; }
+.type-Darkness { --type: #566072; }
+.type-Metal    { --type: #8f9bab; }
+.type-Dragon   { --type: #c9a83c; }
+.type-Fairy    { --type: #e58fc0; }
+.type-Colorless{ --type: #b9b7ae; }
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+header {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  padding: 14px clamp(12px, 4vw, 32px);
+}
+.header-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+h1 { font-size: 1.15rem; margin: 0; display: flex; align-items: center; gap: 8px; }
+h1 .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+.count { color: var(--text-dim); font-size: .85rem; margin-left: auto; }
+.nav-link { color: var(--accent); text-decoration: none; font-size: .85rem; font-weight: 600; white-space: nowrap; }
+.nav-link:hover { text-decoration: underline; }
+
+.search {
+  flex: 1 1 260px; min-width: 180px;
+  padding: 10px 14px; font-size: .95rem;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--text);
+}
+.search:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.filters {
+  display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+}
+.filters select {
+  padding: 7px 10px; font-size: .85rem;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--text);
+}
+.filters label { font-size: .72rem; color: var(--text-dim); display: block; margin-bottom: 3px; }
+.reset {
+  align-self: flex-end; padding: 7px 12px; font-size: .82rem; cursor: pointer;
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+}
+.reset:hover { border-color: var(--accent); }
+
+main { padding: clamp(12px, 3vw, 28px); }
+.grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden; cursor: pointer;
+  box-shadow: var(--shadow);
+  border-top: 3px solid var(--type, var(--border));
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(16,24,40,.14); }
+.card img { width: 100%; aspect-ratio: 367 / 512; object-fit: cover; display: block; background: var(--surface-2); }
+.card-body { padding: 8px 10px 10px; }
+.card-name { font-weight: 600; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-meta { display: flex; justify-content: space-between; gap: 6px; font-size: .72rem; color: var(--text-dim); margin-top: 2px; }
+.badge {
+  display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: .68rem;
+  background: color-mix(in srgb, var(--type, var(--surface-2)) 22%, transparent);
+  color: var(--text); border: 1px solid color-mix(in srgb, var(--type, var(--border)) 45%, transparent);
+}
+
+.empty, .loading { text-align: center; color: var(--text-dim); padding: 60px 20px; }
+#sentinel { height: 1px; }
+
+/* 詳情 modal */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(6, 8, 12, .6); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.modal-backdrop[hidden] { display: none; }
+.modal {
+  background: var(--surface); border-radius: 16px; max-width: 720px; width: 100%;
+  max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 60px rgba(0,0,0,.4);
+  border-top: 4px solid var(--type, var(--accent));
+}
+.modal-head { display: flex; gap: 18px; padding: 20px; flex-wrap: wrap; }
+.modal-head img { width: 220px; max-width: 45vw; border-radius: 10px; }
+.modal-title { font-size: 1.4rem; margin: 0 0 4px; }
+.modal-sub { color: var(--text-dim); font-size: .85rem; }
+.stat-row { display: flex; gap: 14px; flex-wrap: wrap; margin: 10px 0; font-size: .85rem; }
+.stat-row b { color: var(--text-dim); font-weight: 500; }
+.section-title { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); margin: 16px 0 6px; }
+.attack, .ability { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; background: var(--surface-2); }
+.ability { border-left: 3px solid #e0a83c; }
+.attack-head { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
+.attack-effect { font-size: .85rem; color: var(--text-dim); margin-top: 4px; }
+.energy {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%; font-size: .62rem; font-weight: 700;
+  color: #fff; margin-right: 2px;
+}
+.modal-close {
+  position: sticky; top: 8px; float: right; margin: 8px; z-index: 1;
+  width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border); font-size: 1.1rem;
+}
+.modal-body { padding: 0 20px 22px; }

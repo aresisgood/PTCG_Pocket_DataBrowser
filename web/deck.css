@@ -1,0 +1,83 @@
+/* 牌組實驗室專用樣式（搭配 style.css 的變數與 .card 樣式）。 */
+.nav a { color: var(--text-dim); text-decoration: none; font-size: .88rem; }
+.nav a:hover { color: var(--accent); }
+
+.lab {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 18px;
+  align-items: start;
+}
+@media (max-width: 820px) {
+  .lab { grid-template-columns: 1fr; }
+  .builder { order: -1; }
+}
+
+.picker .grid { margin-top: 12px; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+.picker .card img { aspect-ratio: 367 / 512; }
+.picker .card-body { padding: 5px 7px 7px; }
+.picker .card-name { font-size: .78rem; }
+
+.builder { position: sticky; top: 80px; display: flex; flex-direction: column; gap: 14px; }
+.panel {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow);
+}
+
+.deck-head { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.deck-name { flex: 1; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--bg); color: var(--text); font-size: .95rem; }
+.deck-count { font-weight: 700; font-size: 1.05rem; min-width: 34px; text-align: right; }
+.deck-count.full { color: #63bb5b; }
+.deck-count.over { color: var(--accent); }
+
+.deck-list { display: flex; flex-direction: column; gap: 5px; max-height: 300px; overflow-y: auto; }
+.deck-row { display: flex; align-items: center; gap: 8px; font-size: .85rem;
+  padding: 4px 6px; border-radius: 7px; }
+.deck-row:hover { background: var(--surface-2); }
+.deck-row .dr-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.deck-row .dr-set { color: var(--text-dim); font-size: .72rem; }
+.deck-row button { width: 22px; height: 22px; border-radius: 5px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); line-height: 1; }
+.deck-row .dr-count { min-width: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+.deck-empty { color: var(--text-dim); font-size: .85rem; padding: 16px; text-align: center; }
+
+.deck-actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+.btn { padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: .85rem;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text); }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.danger:hover { border-color: var(--accent); color: var(--accent); }
+.btn.wide { width: 100%; }
+.saved-select { flex: 1; min-width: 120px; padding: 7px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: .82rem; }
+
+/* 預測結果 */
+.predict-result { margin-top: 12px; }
+.predict-result:empty { display: none; }
+.wr-main { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.wr-value { font-size: 2.2rem; font-weight: 800; }
+.wr-value.good { color: #4caf72; }
+.wr-value.mid { color: #e0a83c; }
+.wr-value.bad { color: var(--accent); }
+.wr-sub { color: var(--text-dim); font-size: .82rem; }
+.conf { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .72rem; margin-left: 6px; }
+.conf.high { background: rgba(76,175,114,.18); color: #4caf72; }
+.conf.medium { background: rgba(224,168,60,.18); color: #e0a83c; }
+.conf.low, .conf.unknown { background: var(--surface-2); color: var(--text-dim); }
+.arch-name { font-weight: 600; margin: 8px 0 2px; }
+.mu-title { font-size: .74rem; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-dim); margin: 12px 0 5px; }
+.mu-row { display: flex; justify-content: space-between; gap: 8px; font-size: .82rem; padding: 3px 0; }
+.mu-row .mu-rate { font-variant-numeric: tabular-nums; font-weight: 600; }
+.mu-row .mu-rate.win { color: #4caf72; }
+.mu-row .mu-rate.lose { color: var(--accent); }
+.mu-row .mu-games { color: var(--text-dim); font-size: .72rem; }
+.predict-msg { color: var(--text-dim); font-size: .85rem; padding: 8px 0; }
+
+/* Meta 列表 */
+.meta-list { margin-top: 8px; display: flex; flex-direction: column; gap: 3px; max-height: 320px; overflow-y: auto; }
+.meta-row { display: flex; justify-content: space-between; gap: 8px; font-size: .8rem; padding: 3px 4px; }
+.meta-row .m-share { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+summary { cursor: pointer; font-weight: 600; font-size: .9rem; }

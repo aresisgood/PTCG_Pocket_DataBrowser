@@ -1,0 +1,13 @@
+# 執行期依賴。
+requests>=2.32,<3
+beautifulsoup4>=4.13,<5
+
+# 牌組實驗室後端(FastAPI + SQLite）。
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30
+sqlmodel>=0.0.21
+
+# 勝率 ML 模型(選配;無 model.joblib 時 API 會自動停用 ML 預測)。
+scikit-learn>=1.4
+numpy>=1.26
+joblib>=1.3

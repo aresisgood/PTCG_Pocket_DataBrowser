@@ -39,11 +39,11 @@ function fillSelect(id, options, allLabel) {
 }
 function buildFilters() {
   const pair = (v) => [v, v];
-  fillSelect('f-set', uniqueSorted('set_id').map(pair), '全部卡包');
+  fillSelect('f-set', uniqueSorted('set_id').map(pair), '全部系列');
   fillSelect('f-type', [['pokemon', '寶可夢'], ['trainer', '訓練家']], '全部種類');
   fillSelect('f-element', uniqueSorted('element').map(pair), '全部屬性');
   fillSelect('f-rarity', uniqueSorted('rarity').map(pair), '全部稀有度');
-  fillSelect('f-pack', uniqueSorted('pack').map(pair), '全部系列');
+  fillSelect('f-pack', uniqueSorted('pack').map(pair), '全部卡包');
 }
 
 // --- 卡庫 picker -------------------------------------------------------------

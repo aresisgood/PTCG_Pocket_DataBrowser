@@ -37,17 +37,18 @@ async function load() {
 function uniqueSorted(key) {
   return [...new Set(state.all.map((c) => c[key]).filter(Boolean))].sort();
 }
-function fillSelect(id, values, allLabel) {
+function fillSelect(id, options, allLabel) {
   const sel = el(id);
   sel.innerHTML = `<option value="">${allLabel}</option>` +
-    values.map((v) => `<option value="${v}">${v}</option>`).join('');
+    options.map(([v, label]) => `<option value="${v}">${escapeHtml(label)}</option>`).join('');
 }
 function buildFilters() {
-  fillSelect('f-set', uniqueSorted('set_id'), '全部卡包');
-  fillSelect('f-type', ['pokemon', 'trainer'], '全部種類');
-  fillSelect('f-element', uniqueSorted('element'), '全部屬性');
-  fillSelect('f-rarity', uniqueSorted('rarity'), '全部稀有度');
-  fillSelect('f-pack', uniqueSorted('pack'), '全部卡包系列');
+  const pair = (v) => [v, v];
+  fillSelect('f-set', uniqueSorted('set_id').map(pair), '全部系列');
+  fillSelect('f-type', [['pokemon', '寶可夢'], ['trainer', '訓練家']], '全部種類');
+  fillSelect('f-element', uniqueSorted('element').map(pair), '全部屬性');
+  fillSelect('f-rarity', uniqueSorted('rarity').map(pair), '全部稀有度');
+  fillSelect('f-pack', uniqueSorted('pack').map(pair), '全部卡包');
 }
 
 // --- 篩選 + 排序 -------------------------------------------------------------

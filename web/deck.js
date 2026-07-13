@@ -4,8 +4,12 @@
 const CARDS_URL = '/data/cards.json';
 const MAX_COPIES = 2;   // Pocket:同名卡最多 2 張
 const DECK_SIZE = 20;   // 一副牌 20 張
+const PICKER_BATCH = 60;  // 卡庫分批渲染,讓 3000+ 張卡仍保持流暢
 
-const state = { cards: [], byId: {}, deck: [], editingId: null };
+const state = {
+  cards: [], byId: {}, deck: [], editingId: null,
+  pickerList: [], pickerRendered: 0,
+};
 const el = (id) => document.getElementById(id);
 const cardId = (c) => `${c.set_id || c.set}-${c.number}`;
 
@@ -47,32 +51,60 @@ function buildFilters() {
 }
 
 // --- 卡庫 picker -------------------------------------------------------------
+// 搜尋比對範圍與首頁一致:卡名、特性、招式、效果全文。
+function cardText(c) {
+  const atk = (c.attacks || []).map((a) => `${a.name} ${a.effect}`).join(' ');
+  return `${c.name} ${c.ability_name} ${c.ability_text} ${atk} ${c.effect}`.toLowerCase();
+}
+
+/** 依篩選條件重算卡庫清單並從第一批重新渲染。 */
 function applyPicker() {
   const q = el('search').value.trim().toLowerCase();
   const fSet = el('f-set').value, fType = el('f-type').value;
   const fEl = el('f-element').value, fRar = el('f-rarity').value, fPack = el('f-pack').value;
+
+  const collator = new Intl.Collator();
   const list = state.cards.filter((c) =>
     (!fSet || c.set_id === fSet) &&
     (!fType || c.card_type === fType) &&
     (!fEl || c.element === fEl) &&
     (!fRar || c.rarity === fRar) &&
     (!fPack || c.pack === fPack) &&
-    (!q || c.name.toLowerCase().includes(q))
-  ).slice(0, 120);
+    (!q || cardText(c).includes(q))
+  ).sort((a, b) => (            // 先依卡包 id,再依卡牌編號數值
+    a.set_id === b.set_id
+      ? (Number(a.number) || 0) - (Number(b.number) || 0)
+      : collator.compare(a.set_id, b.set_id)
+  ));
+
+  state.pickerList = list;
+  state.pickerRendered = 0;
   const grid = el('picker-grid');
-  grid.innerHTML = '';
+  grid.innerHTML = list.length === 0
+    ? '<div class="picker-empty">沒有符合條件的卡牌。</div>'
+    : '';
+  renderPickerMore();
+}
+
+function pickerTile(c) {
+  const div = document.createElement('div');
+  div.className = `card type-${c.element || 'Colorless'}`;
+  div.innerHTML = `
+    <img loading="lazy" src="${c.image_url}" alt="${escapeHtml(c.name)}"
+         onerror="this.style.visibility='hidden'">
+    <div class="card-body"><div class="card-name">${escapeHtml(c.name)}</div></div>`;
+  div.addEventListener('click', () => addCard(c));
+  return div;
+}
+
+/** 追加渲染下一批卡牌(由捲動觀察哨觸發）。 */
+function renderPickerMore() {
+  const next = state.pickerList.slice(state.pickerRendered,
+                                      state.pickerRendered + PICKER_BATCH);
   const frag = document.createDocumentFragment();
-  for (const c of list) {
-    const div = document.createElement('div');
-    div.className = `card type-${c.element || 'Colorless'}`;
-    div.innerHTML = `
-      <img loading="lazy" src="${c.image_url}" alt="${escapeHtml(c.name)}"
-           onerror="this.style.visibility='hidden'">
-      <div class="card-body"><div class="card-name">${escapeHtml(c.name)}</div></div>`;
-    div.addEventListener('click', () => addCard(c));
-    frag.appendChild(div);
-  }
-  grid.appendChild(frag);
+  for (const c of next) frag.appendChild(pickerTile(c));
+  el('picker-grid').appendChild(frag);
+  state.pickerRendered += next.length;
 }
 
 // --- 牌組狀態 ----------------------------------------------------------------
@@ -266,6 +298,12 @@ function flash(btn, text) {
   setTimeout(() => { btn.textContent = old; }, 1200);
 }
 function bindEvents() {
+  // 捲到卡庫底部前 400px 就預先載入下一批,直到全部卡牌渲染完畢。
+  new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting &&
+        state.pickerRendered < state.pickerList.length) renderPickerMore();
+  }, { rootMargin: '400px' }).observe(el('picker-sentinel'));
+
   el('search').addEventListener('input', debounce(applyPicker, 150));
   ['f-set', 'f-type', 'f-element', 'f-rarity', 'f-pack']
     .forEach((id) => el(id).addEventListener('change', applyPicker));

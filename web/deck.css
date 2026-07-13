@@ -26,6 +26,8 @@
 .picker .card img { aspect-ratio: 367 / 512; }
 .picker .card-body { padding: 5px 7px 7px; }
 .picker .card-name { font-size: .78rem; }
+.picker-empty { grid-column: 1 / -1; color: var(--text-dim); font-size: .85rem;
+  padding: 28px; text-align: center; }
 
 .builder { position: sticky; top: 80px; display: flex; flex-direction: column; gap: 14px; }
 .panel {

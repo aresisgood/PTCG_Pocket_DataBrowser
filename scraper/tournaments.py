@@ -147,10 +147,6 @@ def main() -> None:
             max_tournaments=args.max_tournaments)
 
 
-if __name__ == "__main__":
-    main()
-
-
 def collect(
     *,
     min_players: int = 50,
@@ -215,3 +211,7 @@ def collect(
     log(f"完成:{used}/{len(tours)} 場賽事、{len(matches)} 場對戰、"
         f"{len(meta)} 種原型 -> {DATASET_JSON}")
     return dataset
+
+
+if __name__ == "__main__":
+    main()

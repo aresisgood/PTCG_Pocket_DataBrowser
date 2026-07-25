@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -49,3 +50,7 @@ class PredictRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     cards: list[CardInput] = Field(min_length=1)
+
+
+class HealthResponse(BaseModel):
+    status: Literal["ok"] = "ok"

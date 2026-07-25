@@ -1,7 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 from api.main import create_app
+from api.models import Deck
 
 
 @pytest.fixture
@@ -9,6 +11,13 @@ def client(tmp_path):
     app = create_app(f"sqlite:///{tmp_path / 'test.db'}")
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def legacy_client(tmp_path):
+    app = create_app(f"sqlite:///{tmp_path / 'legacy.db'}")
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        yield app, test_client
 
 
 SAMPLE = {
@@ -86,3 +95,66 @@ def test_create_deck_trims_text_fields(client):
     assert body["name"] == "Trimmed Deck"
     assert body["cards"][0]["set"] == "A1"
     assert body["cards"][0]["number"] == "1"
+
+
+@pytest.mark.parametrize("count", [True, "2", 1.0])
+def test_create_deck_rejects_coerced_card_counts(client, count):
+    response = client.post(
+        "/api/decks",
+        json={
+            "name": "Strict count",
+            "cards": [{"set": "A1", "number": "1", "count": count}],
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def _create_legacy_deck(app) -> int:
+    with Session(app.state.db_engine) as session:
+        deck = Deck(
+            name="Legacy deck",
+            cards=[
+                {
+                    "set": "A1",
+                    "number": "1",
+                    "name": "Legacy card",
+                    "count": 4,
+                    "legacy_note": "preserve me",
+                }
+            ],
+        )
+        session.add(deck)
+        session.commit()
+        session.refresh(deck)
+        assert deck.id is not None
+        return deck.id
+
+
+def test_list_decks_returns_pre_validation_legacy_cards(legacy_client):
+    app, client = legacy_client
+    _create_legacy_deck(app)
+
+    response = client.get("/api/decks")
+
+    assert response.status_code == 200
+    assert response.json()[0]["cards"] == [
+        {
+            "set": "A1",
+            "number": "1",
+            "name": "Legacy card",
+            "count": 4,
+            "legacy_note": "preserve me",
+        }
+    ]
+
+
+def test_get_deck_returns_pre_validation_legacy_cards(legacy_client):
+    app, client = legacy_client
+    deck_id = _create_legacy_deck(app)
+
+    response = client.get(f"/api/decks/{deck_id}")
+
+    assert response.status_code == 200
+    assert response.json()["cards"][0]["count"] == 4
+    assert response.json()["cards"][0]["legacy_note"] == "preserve me"

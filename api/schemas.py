@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -17,7 +17,7 @@ class CardInput(BaseModel):
     set: str = Field(min_length=1, max_length=20)
     number: str = Field(min_length=1, max_length=20)
     name: str | None = Field(default=None, max_length=200)
-    count: int = Field(default=1, ge=1, le=2)
+    count: int = Field(default=1, ge=1, le=2, strict=True)
 
     @field_validator("set", "number", "name", mode="before")
     @classmethod
@@ -42,7 +42,9 @@ class DeckRead(BaseModel):
 
     id: int
     name: str
-    cards: list[CardInput]
+    # Existing SQLite rows predate strict write validation.  Keep their JSON
+    # payload intact on reads so a legacy deck remains viewable and editable.
+    cards: list[dict[str, Any]]
     created_at: datetime
 
 

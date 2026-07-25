@@ -14,6 +14,11 @@ COPY scraper ./scraper
 COPY web ./web
 COPY data ./data
 
+RUN addgroup --system app && adduser --system --ingroup app app \
+    && chown -R app:app /app/data
+
+USER app
+
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \

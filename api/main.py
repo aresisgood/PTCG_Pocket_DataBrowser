@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from scraper.config import DATA_DIR, ROOT
@@ -35,9 +36,15 @@ def create_app(database_url: str | None = None) -> FastAPI:
     @app.get("/api/health", response_model=HealthResponse, tags=["health"])
     def health() -> HealthResponse:
         return HealthResponse()
-    # 提供資料檔(cards.json 等)給前端;單人本機使用。
-    if DATA_DIR.exists():
-        app.mount("/data", StaticFiles(directory=DATA_DIR), name="data")
+
+    cards_path = DATA_DIR / "cards.json"
+
+    @app.get("/data/cards.json", include_in_schema=False)
+    def get_cards_data() -> FileResponse:
+        if not cards_path.is_file():
+            raise HTTPException(status_code=404, detail="cards data not found")
+        return FileResponse(cards_path, media_type="application/json")
+
     # 前端靜態檔掛在最後,避免蓋掉 /api 與 /data。
     web_dir = ROOT / "web"
     if web_dir.exists():

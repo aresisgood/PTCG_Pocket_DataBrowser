@@ -63,3 +63,35 @@ def test_delete_deck(client):
 
 def test_get_missing_deck_returns_404(client):
     assert client.get("/api/decks/999").status_code == 404
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"name": "   ", "cards": []},
+        {"name": "x" * 101, "cards": []},
+        {"name": "Deck", "cards": [{"set": "", "number": "1", "count": 1}]},
+        {"name": "Deck", "cards": [{"set": "A1", "number": "", "count": 1}]},
+        {"name": "Deck", "cards": [{"set": "A1", "number": "1", "count": 0}]},
+        {"name": "Deck", "cards": [{"set": "A1", "number": "1", "count": 3}]},
+    ],
+)
+def test_create_deck_rejects_invalid_payload(client, payload):
+    response = client.post("/api/decks", json=payload)
+    assert response.status_code == 422
+
+
+def test_create_deck_trims_text_fields(client):
+    response = client.post(
+        "/api/decks",
+        json={
+            "name": "  Trimmed Deck  ",
+            "cards": [{"set": " A1 ", "number": " 1 ", "count": 1}],
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["name"] == "Trimmed Deck"
+    assert body["cards"][0]["set"] == "A1"
+    assert body["cards"][0]["number"] == "1"

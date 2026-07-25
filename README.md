@@ -1,15 +1,15 @@
 # PTCG Pocket DataBrowser
 
-這是一個以 Python 打造的後端與資料管線作品集專案，用於探索 **Pokémon TCG Pocket** 的卡牌、賽事結果、牌組類型，以及輕量的牌組表現估計。專案結合可重現的爬蟲與分析流程、FastAPI 應用程式、SQLite 持久化儲存與靜態網頁用戶端。
+這是一個以 Python 後端與資料管線為核心的作品集專案，用於探索 Pokémon TCG Pocket 卡牌、賽事結果、牌組原型，以及提供輕量的牌組表現估計。
 
-## 特色
+## 專案特色
 
 - 以 FastAPI + SQLModel 建構 API，提供牌組 CRUD、健康狀態、預測與環境（meta）端點
 - 可續跑的資料蒐集流程，包含驗證、checkpoint 與失敗 URL 追蹤
 - 賽事資料彙整與選用的 ML 產物，供 API 的環境與預測回應使用
 - 著重後端品質實務：pytest 覆蓋率、Docker 打包，以及在 Python 3.11 與 3.12 上執行的 GitHub Actions
 
-## 架構
+## 系統架構
 
 ```mermaid
 flowchart LR
@@ -21,18 +21,18 @@ flowchart LR
     D1 --> API["FastAPI"]
     D3 --> API
     API --> DB["SQLite"]
-    API --> WEB["Static web client"]
+    API --> WEB["靜態網頁介面 Static web client"]
 ```
 
-## ETL 流程
+## ETL 資料流程
 
 ```mermaid
 flowchart LR
-    F["Fetch"] --> P["Parse"]
-    P --> V["Validate"]
-    V --> C["Checkpoint"]
-    C --> O["Output"]
-    O --> M["Aggregate / Model"]
+    F["擷取 Fetch"] --> P["解析 Parse"]
+    P --> V["驗證 Validate"]
+    V --> C["檢查點 Checkpoint"]
+    C --> O["輸出 Output"]
+    O --> M["彙整／模型 Aggregate / Model"]
     M --> API["REST API"]
 ```
 
@@ -74,7 +74,7 @@ python -m analysis
 | `GET/POST` | `/api/decks` | 列出或建立牌組 |
 | `GET/PUT/DELETE` | `/api/decks/{id}` | 讀取、完整取代或刪除單一牌組 |
 | `POST` | `/api/predict` | 估計牌組表現 |
-| `GET` | `/api/meta` | 回傳目前的牌組類型環境資料 |
+| `GET` | `/api/meta` | 回傳目前的牌組原型環境資料 |
 
 ## 測試與品質檢查
 
@@ -107,4 +107,4 @@ docker run --rm -p 8000:8000 ptcg-pocket-databrowser
 - SQLite 是此儲存庫已驗證的持久化儲存後端。
 - ML 模型為選用項目；沒有模型產物時，API 的 ML 輸出會回傳 `null`。
 
-此儲存庫沒有託管部署；文件記載的持久化設定為 SQLite。
+此儲存庫沒有公開部署；文件記載的持久化設定為 SQLite。

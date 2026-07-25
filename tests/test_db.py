@@ -1,3 +1,8 @@
+import warnings
+
+from fastapi.testclient import TestClient
+from sqlalchemy import event
+
 from api import db
 
 
@@ -24,3 +29,22 @@ def test_create_app_uses_environment_database_url(monkeypatch, tmp_path):
 
     app = create_app()
     assert str(app.state.db_engine.url) == database_url
+
+
+def test_lifespan_disposes_app_database_engine(tmp_path):
+    from api.main import create_app
+
+    app = create_app(f"sqlite:///{tmp_path / 'lifespan.db'}")
+    engine_disposed = False
+
+    @event.listens_for(app.state.db_engine, "engine_disposed")
+    def observe_engine_disposal(engine):
+        nonlocal engine_disposed
+        engine_disposed = True
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", ResourceWarning)
+        with TestClient(app) as client:
+            assert client.get("/api/health").status_code == 200
+
+    assert engine_disposed

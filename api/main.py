@@ -19,8 +19,11 @@ from .schemas import HealthResponse
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db(app.state.db_engine)
-    yield
+    try:
+        init_db(app.state.db_engine)
+        yield
+    finally:
+        app.state.db_engine.dispose()
 
 
 def create_app(database_url: str | None = None) -> FastAPI:

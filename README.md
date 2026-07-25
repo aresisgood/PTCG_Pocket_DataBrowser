@@ -64,7 +64,7 @@ python -m scraper --test
 python -m analysis
 ```
 
-`python -m scraper --test` 是小型蒐集執行。一般爬蟲支援可續跑的 checkpoint、系列選擇與不續跑模式；請執行 `python -m scraper --help` 查看命令列選項。分析需要先蒐集 `data/tournaments/dataset.json`，接著會建立 `data/analysis.json`；ML 訓練也可能額外建立 `data/model.joblib`。
+`python -m scraper --test` 是一次小規模的資料蒐集。一般爬蟲支援可續跑的 checkpoint、系列選擇與不續跑模式；請執行 `python -m scraper --help` 查看命令列選項。分析需要先蒐集 `data/tournaments/dataset.json`，接著會建立 `data/analysis.json`；ML 訓練也可能額外建立 `data/model.joblib`。
 
 ## API
 
@@ -99,12 +99,12 @@ docker run --rm -p 8000:8000 ptcg-pocket-databrowser
 
 ## 資料與模型說明
 
-本專案使用來自 [Limitless TCG tournament API](https://play.limitlesstcg.com) 的已蒐集 Pokémon TCG Pocket 賽事樣本。單場對局結果變異很大：對戰查詢與選用 ML 模型的 AUC 都約為 **0.55**，因此兩者都不能可靠地區分牌組是否成功。對戰查詢在已看過的對戰組合上略佳，但在樣本很小的 0%/100% 儲存格中可能校準不佳。ML 模型的 log-loss 為 **0.69**，相較於對戰查詢比較的 **1.55**；並且可涵蓋約 **25%** 未被對戰查詢看過的對戰組合。這些訊號會一併呈現，而非當作虛假的精確保證。
+本專案使用來自 [Limitless TCG tournament API](https://play.limitlesstcg.com) 的已蒐集 Pokémon TCG Pocket 賽事樣本。單場對局結果變異很大：查表法與選用 ML 模型的 AUC 都約為 **0.55**，因此兩者都不能可靠地區分牌組是否成功。查表法在已看過的對戰組合上略佳，但在樣本很小的 0%/100% 儲存格中可能校準不佳。ML 模型的 log-loss 為 **0.69**；查表法的 log-loss 為 **1.55**。ML 模型可涵蓋約 **25%** 未被查表法看過的對戰組合。這些訊號會一併呈現，而非當作虛假的精確保證。
 
 ## 限制
 
 - 結果描述的是已蒐集的賽事樣本，不保證未來結果。
-- SQLite 是此儲存庫已驗證的持久化儲存後端。
+- SQLite 是此儲存庫已驗證的資料持久化後端。
 - ML 模型為選用項目；沒有模型產物時，API 的 ML 輸出會回傳 `null`。
 
 此儲存庫沒有公開部署；文件記載的持久化設定為 SQLite。

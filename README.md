@@ -1,15 +1,15 @@
 # PTCG Pocket DataBrowser
 
-A Python backend and data pipeline portfolio project for exploring **Pokémon TCG Pocket** cards, tournament results, deck archetypes, and a lightweight deck-performance estimate. It pairs a reproducible scraper and analysis workflow with a FastAPI application, SQLite persistence, and a static web client.
+這是一個以 Python 打造的後端與資料管線作品集專案，用於探索 **Pokémon TCG Pocket** 的卡牌、賽事結果、牌組類型，以及輕量的牌組表現估計。專案結合可重現的爬蟲與分析流程、FastAPI 應用程式、SQLite 持久化儲存與靜態網頁用戶端。
 
-## Highlights
+## 特色
 
-- FastAPI + SQLModel API with deck CRUD, health, prediction, and meta endpoints
-- Resumable data collection with validation, checkpoints, and failed-URL tracking
-- Tournament aggregation and optional ML artifacts that feed the API's meta and prediction responses
-- Backend-focused quality practices: pytest coverage, Docker packaging, and GitHub Actions across Python 3.11 and 3.12
+- 以 FastAPI + SQLModel 建構 API，提供牌組 CRUD、健康狀態、預測與環境（meta）端點
+- 可續跑的資料蒐集流程，包含驗證、checkpoint 與失敗 URL 追蹤
+- 賽事資料彙整與選用的 ML 產物，供 API 的環境與預測回應使用
+- 著重後端品質實務：pytest 覆蓋率、Docker 打包，以及在 Python 3.11 與 3.12 上執行的 GitHub Actions
 
-## Architecture
+## 架構
 
 ```mermaid
 flowchart LR
@@ -24,7 +24,7 @@ flowchart LR
     API --> WEB["Static web client"]
 ```
 
-## ETL flow
+## ETL 流程
 
 ```mermaid
 flowchart LR
@@ -36,75 +36,75 @@ flowchart LR
     M --> API["REST API"]
 ```
 
-## Run locally
+## 在本機執行
 
-Install the project dependencies, then start the API:
+先安裝專案相依套件，再啟動 API：
 
 ```bash
 python -m pip install -r requirements.txt
 python -m uvicorn api.main:app --port 8000
 ```
 
-The API is available at `http://localhost:8000`; interactive API documentation is at `http://localhost:8000/docs`. The static client is in `web/` and can be served by any local static-file server.
+API 位於 `http://localhost:8000`；互動式 API 文件位於 `http://localhost:8000/docs`。靜態用戶端在 `web/`，可使用任一本機靜態檔案伺服器提供服務。
 
-The optional database setting is:
+選用的資料庫設定如下：
 
 ```bash
 DATABASE_URL=sqlite:///data/decks.db
 ```
 
-Without this setting, the application uses an absolute SQLite path under `data/`.
+未設定時，應用程式會使用 `data/` 下的絕對 SQLite 路徑。
 
-## Collect and analyze data
+## 蒐集與分析資料
 
-The card scraper reads from [Limitless TCG](https://pocket.limitlesstcg.com). It writes card data to `data/cards.json`, records progress in `data/cards.checkpoint.json`, and writes URLs that could not be collected to `data/failed_urls.json`.
+卡牌爬蟲從 [Limitless TCG](https://pocket.limitlesstcg.com) 讀取資料。它會將卡牌資料寫入 `data/cards.json`、將進度記錄在 `data/cards.checkpoint.json`，並將無法蒐集的 URL 寫入 `data/failed_urls.json`。
 
 ```bash
 python -m scraper --test
 python -m analysis
 ```
 
-`python -m scraper --test` is a small collection run. The normal scraper supports resumable checkpoints, set selection, and a no-resume mode; run `python -m scraper --help` for its command-line options. Analysis expects a previously collected `data/tournaments/dataset.json`, then creates `data/analysis.json`; ML training can additionally create `data/model.joblib`.
+`python -m scraper --test` 是小型蒐集執行。一般爬蟲支援可續跑的 checkpoint、系列選擇與不續跑模式；請執行 `python -m scraper --help` 查看命令列選項。分析需要先蒐集 `data/tournaments/dataset.json`，接著會建立 `data/analysis.json`；ML 訓練也可能額外建立 `data/model.joblib`。
 
 ## API
 
-| Method | Path | Purpose |
+| 方法 | 路徑 | 用途 |
 | --- | --- | --- |
-| `GET` | `/api/health` | Application health |
-| `GET/POST` | `/api/decks` | List or create decks |
-| `GET/PUT/DELETE` | `/api/decks/{id}` | Read, replace, or delete one deck |
-| `POST` | `/api/predict` | Estimate deck performance |
-| `GET` | `/api/meta` | Return the current archetype meta |
+| `GET` | `/api/health` | 應用程式健康狀態 |
+| `GET/POST` | `/api/decks` | 列出或建立牌組 |
+| `GET/PUT/DELETE` | `/api/decks/{id}` | 讀取、完整取代或刪除單一牌組 |
+| `POST` | `/api/predict` | 估計牌組表現 |
+| `GET` | `/api/meta` | 回傳目前的牌組類型環境資料 |
 
-## Tests and quality checks
+## 測試與品質檢查
 
-Run the full test suite and its coverage report with:
+以下指令可執行完整測試套件與覆蓋率報告：
 
 ```bash
 python -m pytest --cov=scraper --cov=analysis --cov=api --cov-report=term-missing
 ```
 
-The repository also includes GitHub Actions coverage for Python 3.11 and 3.12.
+儲存庫也包含在 Python 3.11 與 3.12 上執行的 GitHub Actions 檢查。
 
 ## Docker
 
-Build and run the API container with:
+以下指令可建置並執行 API 容器：
 
 ```bash
 docker build -t ptcg-pocket-databrowser .
 docker run --rm -p 8000:8000 ptcg-pocket-databrowser
 ```
 
-These are the repository's container startup commands. Docker was not available in the local verification environment for this documentation update, so no local container runtime result is claimed here.
+這些是儲存庫的容器啟動指令。本次文件更新的本機驗證環境沒有 Docker，因此不宣稱本機容器執行結果。
 
-## Data and model notes
+## 資料與模型說明
 
-The project uses the collected Pokémon TCG Pocket tournament sample from the [Limitless TCG tournament API](https://play.limitlesstcg.com). Single-match outcomes are highly variable: both the matchup lookup and optional ML model have AUC of about **0.55**, so neither is a reliable discriminator of deck success. The lookup is slightly better for matchups it has seen but can be poorly calibrated in small 0%/100% cells. The ML model has log-loss of **0.69** versus **1.55** for the lookup comparison and can cover about **25%** of matchups not seen by the lookup; these signals are presented together rather than as a falsely precise guarantee.
+本專案使用來自 [Limitless TCG tournament API](https://play.limitlesstcg.com) 的已蒐集 Pokémon TCG Pocket 賽事樣本。單場對局結果變異很大：對戰查詢與選用 ML 模型的 AUC 都約為 **0.55**，因此兩者都不能可靠地區分牌組是否成功。對戰查詢在已看過的對戰組合上略佳，但在樣本很小的 0%/100% 儲存格中可能校準不佳。ML 模型的 log-loss 為 **0.69**，相較於對戰查詢比較的 **1.55**；並且可涵蓋約 **25%** 未被對戰查詢看過的對戰組合。這些訊號會一併呈現，而非當作虛假的精確保證。
 
-## Limitations
+## 限制
 
-- Results describe the collected tournament sample, not future guaranteed outcomes.
-- SQLite is the verified persistence backend in this repository.
-- The ML model is optional; the API returns `null` for ML output when no model artifact is present.
+- 結果描述的是已蒐集的賽事樣本，不保證未來結果。
+- SQLite 是此儲存庫已驗證的持久化儲存後端。
+- ML 模型為選用項目；沒有模型產物時，API 的 ML 輸出會回傳 `null`。
 
-This repository includes no hosted deployment; its documented persistence configuration is SQLite.
+此儲存庫沒有託管部署；文件記載的持久化設定為 SQLite。

@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.coverage
+htmlcov
+tests
+docs
+data/*.db
+data/*.log
+data/*.checkpoint.json
+data/failed_urls.json
+data/tournaments

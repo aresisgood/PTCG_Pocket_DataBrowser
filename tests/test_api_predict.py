@@ -107,3 +107,22 @@ def test_predict_returns_ml_estimate(ml_client):
     r = ml_client.post("/api/predict", json={"cards": cards}).json()
     assert r["ml_win_rate"] is not None
     assert r["ml_win_rate"] > 0.5   # 強牌對 Meta 應 >50%
+
+
+def test_predict_rejects_empty_card_list(client):
+    response = client.post("/api/predict", json={"cards": []})
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "card",
+    [
+        {"set": "", "number": "1", "count": 1},
+        {"set": "A1", "number": "", "count": 1},
+        {"set": "A1", "number": "1", "count": 0},
+        {"set": "A1", "number": "1", "count": 3},
+    ],
+)
+def test_predict_rejects_invalid_card(client, card):
+    response = client.post("/api/predict", json={"cards": [card]})
+    assert response.status_code == 422

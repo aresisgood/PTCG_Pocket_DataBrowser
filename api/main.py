@@ -14,6 +14,7 @@ from scraper.config import DATA_DIR, ROOT
 
 from .db import create_db_engine, get_database_url, init_db
 from .routers import decks, predict
+from .schemas import HealthResponse
 
 
 @asynccontextmanager
@@ -27,6 +28,10 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app.state.db_engine = create_db_engine(database_url or get_database_url())
     app.include_router(decks.router)
     app.include_router(predict.router)
+
+    @app.get("/api/health", response_model=HealthResponse, tags=["health"])
+    def health() -> HealthResponse:
+        return HealthResponse()
     # 提供資料檔(cards.json 等)給前端;單人本機使用。
     if DATA_DIR.exists():
         app.mount("/data", StaticFiles(directory=DATA_DIR), name="data")

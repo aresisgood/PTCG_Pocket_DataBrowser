@@ -1,10 +1,8 @@
 """預測與 Meta 端點的整合測試(注入合成分析資料）。"""
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import create_engine
-
-from api import db
 from api.analysis_store import AnalysisStore, get_store
+from api.main import create_app
 
 ANALYSIS = {
     "archetypes": {
@@ -27,12 +25,8 @@ ANALYSIS = {
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
-    engine = create_engine(f"sqlite:///{tmp_path / 't.db'}",
-                           connect_args={"check_same_thread": False})
-    monkeypatch.setattr(db, "engine", engine)
-    from api.main import create_app
-    app = create_app()
+def client(tmp_path):
+    app = create_app(f"sqlite:///{tmp_path / 'test.db'}")
     app.dependency_overrides[get_store] = lambda: AnalysisStore(ANALYSIS)
     with TestClient(app) as c:
         yield c
@@ -83,11 +77,8 @@ _ML_DECKS = {
 
 
 @pytest.fixture
-def ml_client(tmp_path, monkeypatch):
+def ml_client(tmp_path):
     from analysis.model import train_model
-    engine = create_engine(f"sqlite:///{tmp_path / 't.db'}",
-                           connect_args={"check_same_thread": False})
-    monkeypatch.setattr(db, "engine", engine)
     model = train_model([{"deck_a": "strong", "deck_b": "weak",
                           "winner_deck": "strong"}] * 20, _ML_DECKS, _ML_CARDS)
     data = {"archetypes": {
@@ -95,8 +86,7 @@ def ml_client(tmp_path, monkeypatch):
         "weak": {"name": "Weak", "share": 0.5, "decklist": _ML_DECKS["weak"]},
     }, "matchups": {}, "source": {}}
     store = AnalysisStore(data, card_index=_ML_CARDS, model=model)
-    from api.main import create_app
-    app = create_app()
+    app = create_app(f"sqlite:///{tmp_path / 'ml.db'}")
     app.dependency_overrides[get_store] = lambda: store
     with TestClient(app) as c:
         yield c

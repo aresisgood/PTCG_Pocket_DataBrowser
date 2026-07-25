@@ -12,18 +12,19 @@ from fastapi.staticfiles import StaticFiles
 
 from scraper.config import DATA_DIR, ROOT
 
-from .db import init_db
+from .db import create_db_engine, get_database_url, init_db
 from .routers import decks, predict
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    init_db(app.state.db_engine)
     yield
 
 
-def create_app() -> FastAPI:
+def create_app(database_url: str | None = None) -> FastAPI:
     app = FastAPI(title="PTCG Pocket Deck Lab", lifespan=lifespan)
+    app.state.db_engine = create_db_engine(database_url or get_database_url())
     app.include_router(decks.router)
     app.include_router(predict.router)
     # 提供資料檔(cards.json 等)給前端;單人本機使用。

@@ -22,17 +22,3 @@ class Deck(SQLModel, table=True):
     cards: list[dict[str, Any]] = Field(default_factory=list,
                                         sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=_now)
-
-
-class DeckCreate(SQLModel):
-    """建立/更新牌組的請求內容。"""
-    name: str
-    cards: list[dict[str, Any]] = []
-
-
-class DeckRead(SQLModel):
-    """牌組回應內容。"""
-    id: int
-    name: str
-    cards: list[dict[str, Any]]
-    created_at: datetime

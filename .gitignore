@@ -21,3 +21,6 @@ data/decks.db
 
 # 本地開發工具設定（Claude Code），不進版本控制
 .claude/
+
+# Local environment values
+.env

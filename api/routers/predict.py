@@ -4,13 +4,13 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
 
 from analysis.classify import classify_deck
 from analysis.features import feature_vector
 from analysis.predict import predict_win_rate
 
 from ..analysis_store import AnalysisStore, get_store
+from ..schemas import CardInput, PredictRequest
 
 router = APIRouter(prefix="/api", tags=["predict"])
 
@@ -20,17 +20,16 @@ _MIN_SIMILARITY = 0.4
 _MIN_GAMES = 20
 
 
-class PredictRequest(BaseModel):
-    cards: list[dict[str, Any]]
-
-
-def _to_decklist(cards: list[dict[str, Any]],
+def _to_decklist(cards: list[CardInput],
                  store: AnalysisStore) -> dict[str, Any]:
     """把前端的扁平卡片清單依卡種拆成牌表結構(供特徵/分類使用）。"""
-    pokemon, trainer = [], []
-    for c in cards:
-        info = store.card_index.get(f"{c.get('set')}-{c.get('number')}")
-        (trainer if info and info.get("card_type") == "trainer" else pokemon).append(c)
+    pokemon: list[dict[str, Any]] = []
+    trainer: list[dict[str, Any]] = []
+    for card in cards:
+        row = card.model_dump(exclude_none=True)
+        info = store.card_index.get(f"{card.set}-{card.number}")
+        target = trainer if info and info.get("card_type") == "trainer" else pokemon
+        target.append(row)
     return {"pokemon": pokemon, "trainer": trainer}
 
 

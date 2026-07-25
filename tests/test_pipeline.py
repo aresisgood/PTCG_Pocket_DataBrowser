@@ -76,3 +76,17 @@ def test_scrape_records_validation_failures(wired, monkeypatch):
     cards = pipeline.scrape(resume=False, log=lambda *_: None)
     assert cards == []
     assert (wired / "failed.json").exists()
+
+
+def test_scrape_logs_execution_summary(wired):
+    messages: list[str] = []
+
+    cards = pipeline.scrape(resume=False, log=messages.append)
+
+    assert len(cards) == 2
+    assert "discovered 1 set(s) to scrape" in messages
+    assert any("[A1] Genetic Apex -- 2 card(s)" in message for message in messages)
+    assert any(
+        message.startswith("done: 2 cards, 0 failure(s) ->")
+        for message in messages
+    )

@@ -95,7 +95,7 @@ docker build -t ptcg-pocket-databrowser .
 docker run --rm -p 8000:8000 ptcg-pocket-databrowser
 ```
 
-這些是儲存庫的容器啟動指令。本次文件更新的本機驗證環境沒有 Docker，因此不宣稱本機容器執行結果。
+上述映像已完成實際建置與執行驗證：`/api/health` 回傳 `{"status":"ok"}`、容器 `HEALTHCHECK` 為 `healthy`，且服務以非 root 的 `app` 使用者執行。驗證完成後已移除測試容器。
 
 ## 資料與模型說明
 

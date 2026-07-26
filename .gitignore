@@ -3,9 +3,16 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
 .venv/
 venv/
+build/
+dist/
+*.egg-info/
 
 # 爬蟲工作檔（保留權威的 data/cards.json 與 data/analysis.json）
 data/cards.checkpoint.json
@@ -19,8 +26,19 @@ data/tournaments/
 # 牌組實驗室的本機資料庫(使用者自己的牌組)
 data/decks.db
 
-# 本地開發工具設定（Claude Code），不進版本控制
+# 本地 AI／代理工具設定與工作文件，不進版本控制
 .claude/
+.agents/
+.codex/
+docs/superpowers/
 
-# Local environment values
+# 本機環境變數（保留可公開的範例）
 .env
+.env.*
+!.env.example
+
+# 編輯器與作業系統產物
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

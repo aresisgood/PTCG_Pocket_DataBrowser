@@ -1,5 +1,7 @@
 """analysis.features 的單元測試(純函式,合成卡片索引)。"""
-from analysis.features import FEATURE_NAMES, deck_features, feature_vector
+from analysis.features import (
+    FEATURE_NAMES, build_card_index, deck_features, feature_vector,
+)
 
 CARD_INDEX = {
     "S-1": {"card_type": "pokemon", "element": "Grass", "hp": 70,
@@ -47,3 +49,9 @@ def test_feature_vector_matches_feature_names_order():
     assert len(vec) == len(FEATURE_NAMES)
     f = deck_features(DECKLIST, CARD_INDEX)
     assert vec == [f[name] for name in FEATURE_NAMES]
+
+
+def test_card_index_uses_one_shared_set_number_identity_rule():
+    cards = [{"set_id": "P-A", "number": "007", "name": "Research"}]
+
+    assert build_card_index(cards) == {"P-A-007": cards[0]}

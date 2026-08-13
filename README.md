@@ -66,6 +66,8 @@ python -m analysis
 
 `python -m scraper --test` 是一次小規模的資料蒐集。一般爬蟲支援可續跑的 checkpoint、系列選擇與不續跑模式；請執行 `python -m scraper --help` 查看命令列選項。分析需要先蒐集 `data/tournaments/dataset.json`，接著會建立 `data/analysis.json`；ML 訓練也可能額外建立 `data/model.joblib`。
 
+執行期分析統一由 `analysis.AnalysisEngine` 的 `predict()` 與 `meta()` 介面提供。`analysis.json` 使用 schema version 1 並在載入時驗證；`model.joblib` 是選用產物，缺少時仍可使用查表預測，但存在且版本、特徵 schema 或內容不相容時會明確回報錯誤。
+
 ## API
 
 | 方法 | 路徑 | 用途 |

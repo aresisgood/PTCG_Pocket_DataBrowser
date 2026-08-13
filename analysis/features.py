@@ -19,6 +19,11 @@ FEATURE_NAMES = (
 )
 
 
+def build_card_index(cards: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Index catalog rows by the shared ``set_id-number`` card identity."""
+    return {f"{card['set_id']}-{card['number']}": card for card in cards}
+
+
 def _card_id(card: dict[str, Any]) -> str:
     return f"{card.get('set')}-{card.get('number')}"
 

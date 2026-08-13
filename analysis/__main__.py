@@ -17,9 +17,9 @@ def main() -> None:
     args = parser.parse_args()
     result = build_from_file(DATASET_JSON, ANALYSIS_JSON,
                              min_archetype_players=args.min_archetype_players)
-    src = result["source"]
-    print(f"analysis.json 已更新:保留 {src['archetypes_kept']}/"
-          f"{src['archetypes_total']} 種原型、{src['matches']} 場對戰 "
+    src = result.source
+    print(f"analysis.json 已更新:保留 {src.archetypes_kept}/"
+          f"{src.archetypes_total} 種原型、{src.matches} 場對戰 "
           f"-> {ANALYSIS_JSON}")
 
 

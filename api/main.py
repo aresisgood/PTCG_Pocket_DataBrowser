@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from scraper.config import DATA_DIR, ROOT
+from project_config import DATA_DIR, ROOT
 
 from .db import create_db_engine, get_database_url, init_db
 from .routers import decks, predict

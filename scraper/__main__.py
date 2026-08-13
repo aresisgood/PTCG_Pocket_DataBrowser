@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import argparse
 
-from .pipeline import scrape
+from project_config import DATA_DIR
+
+from .card_catalog import CardCollectionOptions, HttpCardSource, collect_card_catalog
 
 
 def main() -> None:
@@ -18,7 +20,11 @@ def main() -> None:
     parser.add_argument("--no-resume", dest="resume", action="store_false",
                         help="忽略既有 checkpoint")
     args = parser.parse_args()
-    scrape(test_mode=args.test, only_set=args.only_set, resume=args.resume)
+    options = CardCollectionOptions(
+        test_mode=args.test, only_set=args.only_set, resume=args.resume
+    )
+    with HttpCardSource() as source:
+        collect_card_catalog(options, source, DATA_DIR)
 
 
 if __name__ == "__main__":

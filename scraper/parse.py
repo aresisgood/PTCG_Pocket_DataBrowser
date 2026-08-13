@@ -11,7 +11,7 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
-from .models import empty_card
+from .models import CardSchema, empty_card
 
 _URL_RE = re.compile(r"/cards/([^/]+)/(\d+)")
 _HP_RE = re.compile(r"(\d+)\s*HP")
@@ -52,7 +52,7 @@ def _rarity_from_symbol(symbol: str) -> str:
     return ""
 
 
-def _parse_type(type_el, card: dict[str, Any]) -> None:
+def _parse_type(type_el, card: CardSchema) -> None:
     """從 type 區塊填入 card_type / trainer_type / stage / evolves_from。"""
     parts = [p.strip() for p in _norm(type_el.get_text()).split(" - ") if p.strip()]
     if not parts:
@@ -74,7 +74,7 @@ def _parse_type(type_el, card: dict[str, Any]) -> None:
             card["trainer_type"] = parts[1]
 
 
-def _parse_title(title_el, card: dict[str, Any]) -> None:
+def _parse_title(title_el, card: CardSchema) -> None:
     """從 title 區塊填入 element 與 hp（僅寶可夢卡）。"""
     normalized = _norm(title_el.get_text())
     hp_match = _HP_RE.search(normalized)
@@ -114,7 +114,7 @@ def _parse_attacks(card_text) -> list[dict[str, Any]]:
     return attacks
 
 
-def _parse_ability(card_text, card: dict[str, Any]) -> None:
+def _parse_ability(card_text, card: CardSchema) -> None:
     ability = card_text.select_one(".card-text-ability")
     if ability is None:
         return
@@ -141,7 +141,7 @@ def _parse_effect(card_text) -> str:
     return " ".join(parts)
 
 
-def _parse_prints(soup, card: dict[str, Any]) -> None:
+def _parse_prints(soup, card: CardSchema) -> None:
     prints = soup.select_one(".card-prints-current")
     if prints is None:
         return
@@ -168,7 +168,7 @@ def _parse_prints(soup, card: dict[str, Any]) -> None:
         break
 
 
-def parse_card_page(html: str, url: str) -> dict[str, Any]:
+def parse_card_page(html: str, url: str) -> CardSchema:
     """把單張卡牌詳情頁解析成卡牌 dict。
 
     Args:

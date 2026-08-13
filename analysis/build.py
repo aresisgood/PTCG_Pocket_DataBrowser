@@ -9,11 +9,10 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from scraper.config import DATA_DIR
+from project_config import ANALYSIS_JSON
 
 from .matchups import matchup_table, meta_share, overall_win_rates
 
-ANALYSIS_JSON = DATA_DIR / "analysis.json"
 
 
 def build_analysis(dataset: dict[str, Any], *,

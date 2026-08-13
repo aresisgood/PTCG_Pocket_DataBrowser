@@ -113,7 +113,7 @@ class AnalysisSnapshot:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AnalysisSnapshot:
         version = data.get("schema_version")
-        if version != ANALYSIS_SCHEMA_VERSION:
+        if type(version) is not int or version != ANALYSIS_SCHEMA_VERSION:
             raise AnalysisArtifactError(
                 f"unsupported analysis schema version {version}"
             )
@@ -134,7 +134,7 @@ class AnalysisSnapshot:
                     players=row["players"],
                     share=row["share"],
                     overall=(OverallRecord(**row["overall"])
-                             if row.get("overall") else None),
+                             if row["overall"] is not None else None),
                     decklist=row["decklist"],
                 )
                 for deck_id, row in archetype_data.items()

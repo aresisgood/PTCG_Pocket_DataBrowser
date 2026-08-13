@@ -19,8 +19,22 @@ FEATURE_NAMES = (
 )
 
 
-def _card_id(card: dict[str, Any]) -> str:
-    return f"{card.get('set')}-{card.get('number')}"
+def card_identity(set_id: object, number: object) -> str:
+    """Return the one canonical card identity used by training and runtime."""
+    return f"{set_id}-{number}"
+
+
+def catalog_card_identity(card: dict[str, Any]) -> str:
+    return card_identity(card["set_id"], card["number"])
+
+
+def deck_card_identity(card: dict[str, Any]) -> str:
+    return card_identity(card.get("set"), card.get("number"))
+
+
+def build_card_index(cards: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Index catalog rows by the shared card identity rule."""
+    return {catalog_card_identity(card): card for card in cards}
 
 
 def deck_features(decklist: dict[str, Any],
@@ -35,7 +49,7 @@ def deck_features(decklist: dict[str, Any],
         count = card.get("count", 1)
         distinct += 1
         f["n_pokemon"] += count
-        info = card_index.get(_card_id(card))
+        info = card_index.get(deck_card_identity(card))
         if not info:
             continue  # 查不到屬性的卡:只計張數,不貢獻其餘特徵
         element = info.get("element")

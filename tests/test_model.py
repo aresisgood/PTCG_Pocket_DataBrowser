@@ -45,3 +45,21 @@ def test_deck_win_rate_weights_by_meta():
     rate = model.deck_win_rate(model.features["strong"], meta_feats,
                                {"weak": 1.0})
     assert rate > 0.6
+
+
+def test_predictor_accepts_decklist_and_hides_feature_vector():
+    model = train_model(MATCHES, DECKLISTS, CARD_INDEX)
+
+    rate = model.predict(DECKLISTS["strong"], CARD_INDEX, {"weak": 1.0})
+
+    assert rate > 0.6
+
+
+def test_versioned_model_save_load_round_trip(tmp_path):
+    path = tmp_path / "model.joblib"
+    model = train_model(MATCHES, DECKLISTS, CARD_INDEX)
+    model.save(path)
+
+    loaded = type(model).load(path)
+
+    assert loaded.predict(DECKLISTS["strong"], CARD_INDEX, {"weak": 1.0}) > 0.6

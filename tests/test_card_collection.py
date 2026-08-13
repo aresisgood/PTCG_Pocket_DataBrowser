@@ -11,7 +11,7 @@ from scraper.card_catalog import (
     collect_card_catalog,
 )
 from scraper.fetch import FetchError
-from scraper.models import CARD_KEYS
+from scraper.models import CARD_KEYS, CardSchema
 import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -38,6 +38,7 @@ def test_clean_run_overwrites_stale_failure_artifact(tmp_path):
     assert result.collected_count == 1
     assert result.failures == []
     assert json.loads(failure_path.read_text(encoding="utf-8")) == []
+    assert isinstance(result.summary.cards[0], CardSchema)
     assert set(result.summary.cards[0]) == set(CARD_KEYS)
 
 
@@ -77,7 +78,8 @@ def test_resume_uses_checkpoint_without_refetching_card(tmp_path):
 
     result = collect_card_catalog(CardCollectionOptions(), source, tmp_path)
 
-    assert result.summary.cards == [existing]
+    assert [card.url for card in result.summary.cards] == [url]
+    assert result.summary.cards[0].name == "Existing"
     assert result.collected_count == 0
     assert result.skipped_count == 1
 

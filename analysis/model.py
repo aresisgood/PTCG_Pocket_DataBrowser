@@ -120,6 +120,8 @@ class WinModel:
         pipe = blob.get("pipe")
         if not callable(getattr(pipe, "predict_proba", None)):
             raise ModelArtifactError("invalid model prediction pipeline")
+        if getattr(pipe, "n_features_in_", None) != len(FEATURE_NAMES):
+            raise ModelArtifactError("incompatible pipeline feature dimension")
         try:
             return cls(pipe, features)
         except KeyError as exc:

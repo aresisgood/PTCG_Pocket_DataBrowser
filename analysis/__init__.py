@@ -6,8 +6,8 @@
     predict  - 綜合對戰表 + Meta 佔比 → 預估勝率 + 信心度
 """
 
-from .build import build_analysis
-from .model import ModelArtifactError, train_model
+from typing import TYPE_CHECKING, Any
+
 from .runtime import (
     AnalysisArtifactError,
     AnalysisEngine,
@@ -19,6 +19,10 @@ from .runtime import (
     Prediction,
     PredictionPolicy,
 )
+
+if TYPE_CHECKING:
+    from .build import build_analysis
+    from .model import ModelArtifactError, train_model
 
 __all__ = [
     "AnalysisArtifactError",
@@ -34,3 +38,15 @@ __all__ = [
     "build_analysis",
     "train_model",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """Lazily expose offline builder/trainer APIs without loading sklearn."""
+    if name == "build_analysis":
+        from .build import build_analysis
+        return build_analysis
+    if name in {"ModelArtifactError", "train_model"}:
+        from .model import ModelArtifactError, train_model
+        return {"ModelArtifactError": ModelArtifactError,
+                "train_model": train_model}[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

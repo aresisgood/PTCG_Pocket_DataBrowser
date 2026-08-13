@@ -3,6 +3,10 @@
 import pytest
 import joblib
 import json
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 
 from analysis.artifacts import load_engine, load_snapshot
 from analysis.features import FEATURE_NAMES
@@ -217,4 +221,39 @@ def test_model_rejects_pipeline_without_prediction_contract(tmp_path):
     )
 
     with pytest.raises(ModelArtifactError, match="invalid model prediction pipeline"):
+        WinModel.load(path)
+
+
+def test_snapshot_rejects_boolean_version_and_empty_overall():
+    base = {
+        "schema_version": True,
+        "generated_at": "2026-08-13T00:00:00+00:00",
+        "source": {"tournaments": 1, "matches": 0,
+                   "archetypes_total": 1, "archetypes_kept": 1},
+        "archetypes": {
+            "A": {"name": "A", "players": 1, "share": 1.0,
+                  "overall": None, "decklist": {}}
+        },
+        "matchups": {},
+    }
+    with pytest.raises(AnalysisArtifactError, match="unsupported analysis schema"):
+        AnalysisSnapshot.from_dict(base)
+
+    base["schema_version"] = 1
+    base["archetypes"]["A"]["overall"] = {}
+    with pytest.raises(AnalysisArtifactError, match="invalid analysis snapshot"):
+        AnalysisSnapshot.from_dict(base)
+
+
+def test_model_rejects_pipeline_trained_for_different_feature_dimension(tmp_path):
+    pipe = make_pipeline(StandardScaler(), LogisticRegression())
+    pipe.fit(np.array([[0.0], [1.0]]), np.array([0, 1]))
+    path = tmp_path / "model.joblib"
+    joblib.dump(
+        {"artifact_version": 1, "feature_schema": list(FEATURE_NAMES),
+         "pipe": pipe, "features": {}},
+        path,
+    )
+
+    with pytest.raises(ModelArtifactError, match="pipeline feature dimension"):
         WinModel.load(path)

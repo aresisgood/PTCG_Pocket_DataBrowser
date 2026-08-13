@@ -7,16 +7,23 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 from project_config import ANALYSIS_JSON
 
 from .matchups import matchup_table, meta_share, overall_win_rates
+from .runtime import ANALYSIS_SCHEMA_VERSION, AnalysisSnapshot
 
 
+Clock = Callable[[], datetime]
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 def build_analysis(dataset: dict[str, Any], *,
-                   min_archetype_players: int = 5) -> dict[str, Any]:
+                   min_archetype_players: int = 5,
+                   clock: Clock = _utc_now) -> AnalysisSnapshot:
     """由 dataset(collect 的輸出)計算對戰表與原型摘要。"""
     matches = dataset["matches"]
     meta = dataset["meta"]
@@ -38,8 +45,9 @@ def build_analysis(dataset: dict[str, Any], *,
             "decklist": decklists.get(deck_id, {}),
         }
 
-    return {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+    return AnalysisSnapshot.from_dict({
+        "schema_version": ANALYSIS_SCHEMA_VERSION,
+        "generated_at": clock().isoformat(),
         "source": {
             "tournaments": len(dataset.get("tournaments", [])),
             "matches": len(matches),
@@ -48,14 +56,14 @@ def build_analysis(dataset: dict[str, Any], *,
         },
         "archetypes": archetypes,
         "matchups": matchup_table(matches),
-    }
+    })
 
 
 def build_from_file(dataset_path, out_path=ANALYSIS_JSON, *,
-                    min_archetype_players: int = 5) -> dict[str, Any]:
+                    min_archetype_players: int = 5) -> AnalysisSnapshot:
     """讀取 dataset.json、計算分析、寫出 analysis.json。"""
     dataset = json.loads(dataset_path.read_text(encoding="utf-8"))
     analysis = build_analysis(dataset, min_archetype_players=min_archetype_players)
-    out_path.write_text(json.dumps(analysis, ensure_ascii=False, indent=1),
+    out_path.write_text(json.dumps(analysis.to_dict(), ensure_ascii=False, indent=1),
                         encoding="utf-8")
     return analysis

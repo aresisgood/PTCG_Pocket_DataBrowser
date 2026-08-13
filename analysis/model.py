@@ -16,7 +16,13 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from .features import feature_vector
+from .features import FEATURE_NAMES, feature_vector
+
+MODEL_ARTIFACT_VERSION = 1
+
+
+class ModelArtifactError(RuntimeError):
+    """A present ML artifact is corrupt or incompatible."""
 
 
 def archetype_features(decklists: dict[str, Any],
@@ -67,13 +73,56 @@ class WinModel:
             den += share
         return num / den if den else None
 
+    def predict(
+        self,
+        decklist: dict[str, Any],
+        card_index: dict[str, dict[str, Any]],
+        meta_share: dict[str, float],
+    ) -> float | None:
+        """Predict from a decklist while keeping feature extraction internal."""
+        return self.deck_win_rate(
+            feature_vector(decklist, card_index), self.features, meta_share
+        )
+
     def save(self, path) -> None:
-        joblib.dump({"pipe": self.pipe, "features": self.features}, path)
+        joblib.dump(
+            {
+                "artifact_version": MODEL_ARTIFACT_VERSION,
+                "feature_schema": list(FEATURE_NAMES),
+                "pipe": self.pipe,
+                "features": self.features,
+            },
+            path,
+        )
 
     @classmethod
     def load(cls, path) -> "WinModel":
-        blob = joblib.load(path)
-        return cls(blob["pipe"], blob.get("features", {}))
+        try:
+            blob = joblib.load(path)
+        except Exception as exc:
+            raise ModelArtifactError(f"invalid model artifact {path}: {exc}") from exc
+        if not isinstance(blob, dict):
+            raise ModelArtifactError(f"invalid model artifact {path}: root must be dict")
+        version = blob.get("artifact_version")
+        if version != MODEL_ARTIFACT_VERSION:
+            raise ModelArtifactError(f"unsupported model artifact version {version}")
+        if blob.get("feature_schema") != list(FEATURE_NAMES):
+            raise ModelArtifactError("incompatible feature schema")
+        features = blob.get("features", {})
+        if not isinstance(features, dict):
+            raise ModelArtifactError("invalid model features")
+        if any(
+            not isinstance(vector, (list, tuple))
+            or len(vector) != len(FEATURE_NAMES)
+            for vector in features.values()
+        ):
+            raise ModelArtifactError("invalid model feature vector")
+        try:
+            return cls(blob["pipe"], features)
+        except KeyError as exc:
+            raise ModelArtifactError(
+                f"invalid model artifact {path}: missing {exc}"
+            ) from exc
 
 
 def train_model(matches: list[dict[str, Any]],

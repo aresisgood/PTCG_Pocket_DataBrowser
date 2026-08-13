@@ -14,6 +14,7 @@ from sklearn.model_selection import train_test_split
 
 from project_config import DATA_DIR, MODEL_PATH
 
+from .features import build_card_index
 from .matchups import matchup_table
 from .model import archetype_features, train_model
 
@@ -21,7 +22,7 @@ from .model import archetype_features, train_model
 
 def load_card_index() -> dict[str, dict[str, Any]]:
     cards = json.loads((DATA_DIR / "cards.json").read_text(encoding="utf-8"))
-    return {f"{c['set_id']}-{c['number']}": c for c in cards}
+    return build_card_index(cards)
 
 
 def _baseline_prob(table, a: str, b: str) -> tuple[float, bool]:

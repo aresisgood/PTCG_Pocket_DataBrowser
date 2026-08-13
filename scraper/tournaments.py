@@ -8,16 +8,13 @@ fetch_* 包裝才實際打 API。
 """
 from __future__ import annotations
 
-import json
-import time
-from collections import Counter
 from pathlib import Path
 from typing import Any, Callable
 
 import requests
 
-from .config import DATA_DIR
-from .fetch import FetchError, fetch_json
+from project_config import TOURNAMENTS_DIR, TOURNAMENT_DATASET_JSON as DATASET_JSON
+from .fetch import fetch_json
 
 API_BASE = "https://play.limitlesstcg.com/api"
 GAME = "POCKET"
@@ -25,8 +22,6 @@ GAME = "POCKET"
 # 此 API 的限流較嚴,採較保守的請求間隔。
 API_DELAY = 1.2
 
-TOURNAMENTS_DIR = DATA_DIR / "tournaments"
-DATASET_JSON = TOURNAMENTS_DIR / "dataset.json"
 
 # winner 欄位的非勝方語意:-1 = 未開打 / 輪空,0 = 平手。
 _NON_WINNER = (-1, 0, None)
@@ -102,7 +97,7 @@ def build_matches(
     matches: list[dict[str, Any]] = []
     for m in parse_pairings(pairings):
         p1, p2, w = m["player1"], m["player2"], m["winner"]
-        if p1 not in standings or p2 not in standings:
+        if p1 not in standings or p2 not in standings or w not in standings:
             continue
         matches.append({
             "deck_a": standings[p1]["deck_id"],
@@ -143,8 +138,19 @@ def main() -> None:
                         help="只納入此日期(YYYY-MM-DD)之後的賽事")
     parser.add_argument("--max", type=int, default=40, dest="max_tournaments")
     args = parser.parse_args()
-    collect(min_players=args.min_players, after=args.after,
-            max_tournaments=args.max_tournaments)
+    from .tournament_dataset import (
+        HttpTournamentSource,
+        TournamentCollectionOptions,
+        collect_tournament_dataset,
+    )
+
+    options = TournamentCollectionOptions(
+        min_players=args.min_players,
+        after=args.after,
+        max_tournaments=args.max_tournaments,
+    )
+    with HttpTournamentSource() as source:
+        collect_tournament_dataset(options, source, TOURNAMENTS_DIR)
 
 
 def collect(
@@ -155,62 +161,23 @@ def collect(
     session: requests.Session | None = None,
     log: Callable[[str], None] = print,
 ) -> dict[str, Any]:
-    """抓取近期大型賽事並整合成分析用資料集。
+    """Backward-compatible adapter returning the historical dataset dict."""
+    from .tournament_dataset import (
+        HttpTournamentSource,
+        TournamentCollectionOptions,
+        collect_tournament_dataset,
+    )
 
-    回傳(並存到 DATASET_JSON):
-        matches     - 所有對戰 {deck_a, deck_b, winner_deck}
-        meta        - {deck_id: 使用該原型的玩家數}(當前 Meta 佔比）
-        names       - {deck_id: 顯示名稱}
-        decklists   - {deck_id: 代表牌表}(供牌組→原型分類）
-        tournaments - 納入的賽事 [{id, name, date, players}]
-    """
-    session = session or requests.Session()
-    tours = select_tournaments(fetch_tournaments(session=session),
-                               min_players=min_players, after=after)
-    tours = tours[:max_tournaments]
-    log(f"納入 {len(tours)} 場賽事(min_players={min_players}, after={after})")
-
-    matches: list[dict[str, Any]] = []
-    meta: Counter[str] = Counter()
-    names: dict[str, str] = {}
-    decklists: dict[str, Any] = {}
-
-    used = 0
-    for t in tours:
-        try:
-            standings = parse_standings(fetch_standings(t["id"], session))
-            pairings = fetch_pairings(t["id"], session)
-        except FetchError as exc:
-            # 單場失敗（如限流）不應中斷整批;記錄後跳過。
-            log(f"  ! 略過 {t.get('name','')}: {exc}")
-            continue
-        matches.extend(build_matches(standings, pairings))
-        for info in standings.values():
-            did = info["deck_id"]
-            meta[did] += 1
-            names.setdefault(did, info["deck_name"])
-            decklists.setdefault(did, info["decklist"])
-        used += 1
-        log(f"  [{t.get('date','')[:10]}] {t.get('name','')} "
-            f"-- {len(standings)} 人")
-        time.sleep(API_DELAY)
-
-    dataset = {
-        "matches": matches,
-        "meta": dict(meta),
-        "names": names,
-        "decklists": decklists,
-        "tournaments": [
-            {"id": t["id"], "name": t.get("name"), "date": t.get("date"),
-             "players": t.get("players")} for t in tours
-        ],
-    }
-    TOURNAMENTS_DIR.mkdir(parents=True, exist_ok=True)
-    DATASET_JSON.write_text(json.dumps(dataset, ensure_ascii=False, indent=1),
-                            encoding="utf-8")
-    log(f"完成:{used}/{len(tours)} 場賽事、{len(matches)} 場對戰、"
-        f"{len(meta)} 種原型 -> {DATASET_JSON}")
-    return dataset
+    options = TournamentCollectionOptions(
+        min_players=min_players,
+        after=after,
+        max_tournaments=max_tournaments,
+    )
+    with HttpTournamentSource(session=session) as source:
+        result = collect_tournament_dataset(
+            options, source, TOURNAMENTS_DIR, log=log
+        )
+    return result.summary.dataset
 
 
 if __name__ == "__main__":

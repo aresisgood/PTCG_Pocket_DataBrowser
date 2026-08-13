@@ -19,13 +19,26 @@ FEATURE_NAMES = (
 )
 
 
+def card_identity(set_id: object, number: object) -> str:
+    """Return the one canonical card identity used by training and runtime."""
+    return f"{set_id}-{number}"
+
+
+def catalog_card_identity(card: dict[str, Any]) -> str:
+    return card_identity(card["set_id"], card["number"])
+
+
+def deck_card_identity(card: dict[str, Any]) -> str:
+    return card_identity(card.get("set"), card.get("number"))
+
+
 def build_card_index(cards: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """Index catalog rows by the shared ``set_id-number`` card identity."""
-    return {f"{card['set_id']}-{card['number']}": card for card in cards}
+    """Index catalog rows by the shared card identity rule."""
+    return {catalog_card_identity(card): card for card in cards}
 
 
 def _card_id(card: dict[str, Any]) -> str:
-    return f"{card.get('set')}-{card.get('number')}"
+    return deck_card_identity(card)
 
 
 def deck_features(decklist: dict[str, Any],

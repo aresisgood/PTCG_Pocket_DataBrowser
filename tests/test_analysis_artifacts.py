@@ -174,3 +174,47 @@ def test_model_rejects_feature_vectors_with_wrong_length(tmp_path):
 
     with pytest.raises(ModelArtifactError, match="invalid model feature vector"):
         WinModel.load(path)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("archetypes", [], "archetypes must be an object"),
+        ("source.matches", -1, "source counts must be non-negative integers"),
+        ("archetypes.A.share", "half", "share must be between 0 and 1"),
+    ],
+)
+def test_snapshot_rejects_invalid_required_field_types_and_ranges(
+    field, value, message
+):
+    data = {
+        "schema_version": 1,
+        "generated_at": "2026-08-13T00:00:00+00:00",
+        "source": {"tournaments": 1, "matches": 0,
+                   "archetypes_total": 1, "archetypes_kept": 1},
+        "archetypes": {
+            "A": {"name": "A", "players": 1, "share": 0.5,
+                  "overall": None, "decklist": {}}
+        },
+        "matchups": {},
+    }
+    target = data
+    parts = field.split(".")
+    for part in parts[:-1]:
+        target = target[part]
+    target[parts[-1]] = value
+
+    with pytest.raises(AnalysisArtifactError, match=message):
+        AnalysisSnapshot.from_dict(data)
+
+
+def test_model_rejects_pipeline_without_prediction_contract(tmp_path):
+    path = tmp_path / "model.joblib"
+    joblib.dump(
+        {"artifact_version": 1, "feature_schema": list(FEATURE_NAMES),
+         "pipe": object(), "features": {}},
+        path,
+    )
+
+    with pytest.raises(ModelArtifactError, match="invalid model prediction pipeline"):
+        WinModel.load(path)

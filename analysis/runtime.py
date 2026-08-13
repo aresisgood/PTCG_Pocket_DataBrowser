@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from .classify import classify_deck
+from .features import deck_card_identity
 from .predict import predict_win_rate
 
 Confidence = Literal["high", "medium", "low", "unknown"]
@@ -35,12 +36,30 @@ class SourceSummary:
     archetypes_total: int
     archetypes_kept: int
 
+    def __post_init__(self) -> None:
+        values = (
+            self.tournaments, self.matches,
+            self.archetypes_total, self.archetypes_kept,
+        )
+        if any(type(value) is not int or value < 0 for value in values):
+            raise ValueError("source counts must be non-negative integers")
+        if self.archetypes_kept > self.archetypes_total:
+            raise ValueError("archetypes_kept cannot exceed archetypes_total")
+
 
 @dataclass(frozen=True, slots=True)
 class OverallRecord:
     wins: int
     games: int
     rate: float
+
+    def __post_init__(self) -> None:
+        if (type(self.wins) is not int or type(self.games) is not int
+                or self.games < 0 or not 0 <= self.wins <= self.games):
+            raise ValueError("overall wins must be between 0 and games")
+        if (not isinstance(self.rate, (int, float))
+                or isinstance(self.rate, bool) or not 0 <= self.rate <= 1):
+            raise ValueError("overall rate must be between 0 and 1")
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +70,17 @@ class ArchetypeRecord:
     overall: OverallRecord | None
     decklist: dict[str, Any]
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str):
+            raise ValueError("archetype name must be a string")
+        if type(self.players) is not int or self.players < 0:
+            raise ValueError("players must be a non-negative integer")
+        if (not isinstance(self.share, (int, float))
+                or isinstance(self.share, bool) or not 0 <= self.share <= 1):
+            raise ValueError("share must be between 0 and 1")
+        if not isinstance(self.decklist, dict):
+            raise ValueError("decklist must be an object")
+
 
 @dataclass(frozen=True, slots=True)
 class MatchupCell:
@@ -58,7 +88,8 @@ class MatchupCell:
     games: int
 
     def __post_init__(self) -> None:
-        if self.games < 0 or not 0 <= self.wins <= self.games:
+        if (type(self.wins) is not int or type(self.games) is not int
+                or self.games < 0 or not 0 <= self.wins <= self.games):
             raise ValueError("wins must be between 0 and games")
 
 
@@ -87,7 +118,16 @@ class AnalysisSnapshot:
                 f"unsupported analysis schema version {version}"
             )
         try:
-            source = SourceSummary(**data["source"])
+            source_data = data["source"]
+            archetype_data = data["archetypes"]
+            matchup_data = data["matchups"]
+            if not isinstance(source_data, dict):
+                raise ValueError("source must be an object")
+            if not isinstance(archetype_data, dict):
+                raise ValueError("archetypes must be an object")
+            if not isinstance(matchup_data, dict):
+                raise ValueError("matchups must be an object")
+            source = SourceSummary(**source_data)
             archetypes = {
                 deck_id: ArchetypeRecord(
                     name=row.get("name", deck_id),
@@ -97,14 +137,14 @@ class AnalysisSnapshot:
                              if row.get("overall") else None),
                     decklist=row["decklist"],
                 )
-                for deck_id, row in data["archetypes"].items()
+                for deck_id, row in archetype_data.items()
             }
             matchups = {
                 deck_id: {
                     opponent: MatchupCell(**cell)
                     for opponent, cell in opponents.items()
                 }
-                for deck_id, opponents in data["matchups"].items()
+                for deck_id, opponents in matchup_data.items()
             }
             return cls(
                 schema_version=data["schema_version"],
@@ -113,7 +153,7 @@ class AnalysisSnapshot:
                 archetypes=archetypes,
                 matchups=matchups,
             )
-        except (KeyError, TypeError, ValueError) as exc:
+        except (AttributeError, KeyError, TypeError, ValueError) as exc:
             raise AnalysisArtifactError(
                 f"invalid analysis snapshot: {exc}"
             ) from exc
@@ -295,7 +335,7 @@ class AnalysisEngine:
         pokemon: list[dict[str, Any]] = []
         trainer: list[dict[str, Any]] = []
         for card in deck:
-            card_id = f"{card.get('set')}-{card.get('number')}"
+            card_id = deck_card_identity(card)
             info = self._card_index.get(card_id)
             target = trainer if info and info.get("card_type") == "trainer" else pokemon
             target.append(card)

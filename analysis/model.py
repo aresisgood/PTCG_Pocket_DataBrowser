@@ -117,8 +117,11 @@ class WinModel:
             for vector in features.values()
         ):
             raise ModelArtifactError("invalid model feature vector")
+        pipe = blob.get("pipe")
+        if not callable(getattr(pipe, "predict_proba", None)):
+            raise ModelArtifactError("invalid model prediction pipeline")
         try:
-            return cls(blob["pipe"], features)
+            return cls(pipe, features)
         except KeyError as exc:
             raise ModelArtifactError(
                 f"invalid model artifact {path}: missing {exc}"

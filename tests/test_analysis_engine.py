@@ -203,3 +203,18 @@ def test_confidence_levels_follow_central_policy(policy, expected):
     result = engine.predict(_snapshot().archetypes["deckA"].decklist)
 
     assert result.confidence == expected
+
+
+def test_meta_preserves_counts_shares_and_name_fallback():
+    data = _snapshot().to_dict()
+    del data["archetypes"]["deckB"]["name"]
+    engine = AnalysisEngine(AnalysisSnapshot.from_dict(data))
+
+    meta = engine.meta()
+
+    fallback = next(row for row in meta.archetypes if row.id == "deckB")
+    assert fallback.name == "deckB"
+    assert fallback.players == 20
+    assert fallback.share == 0.4
+    assert fallback.win_rate == 0.4
+    assert fallback.games == 100

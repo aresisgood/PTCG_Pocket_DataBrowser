@@ -10,6 +10,8 @@ from scraper.card_catalog import (
     InMemoryCardSource,
     collect_card_catalog,
 )
+from scraper.fetch import FetchError
+from scraper.models import CARD_KEYS
 import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -36,12 +38,7 @@ def test_clean_run_overwrites_stale_failure_artifact(tmp_path):
     assert result.collected_count == 1
     assert result.failures == []
     assert json.loads(failure_path.read_text(encoding="utf-8")) == []
-    assert set(result.summary["cards"][0]) == {
-        "url", "set_id", "number", "name", "card_type", "trainer_type",
-        "element", "stage", "evolves_from", "hp", "weakness",
-        "retreat_cost", "ability_name", "ability_text", "attacks", "effect",
-        "rarity", "pack", "illustrator", "set_name", "image_url",
-    }
+    assert set(result.summary.cards[0]) == set(CARD_KEYS)
 
 
 class TrackingSession:
@@ -80,7 +77,9 @@ def test_resume_uses_checkpoint_without_refetching_card(tmp_path):
 
     result = collect_card_catalog(CardCollectionOptions(), source, tmp_path)
 
-    assert result.summary["cards"] == [existing]
+    assert result.summary.cards == [existing]
+    assert result.collected_count == 0
+    assert result.skipped_count == 1
 
 
 def test_malformed_checkpoint_raises_clear_collection_error(tmp_path):
@@ -88,3 +87,20 @@ def test_malformed_checkpoint_raises_clear_collection_error(tmp_path):
 
     with pytest.raises(CollectionError, match="malformed checkpoint"):
         collect_card_catalog(CardCollectionOptions(), _source(), tmp_path)
+
+
+def test_card_failure_is_reported_without_discarding_success(tmp_path):
+    good_url = "https://pocket.limitlesstcg.com/cards/A1/1"
+    bad_url = "https://pocket.limitlesstcg.com/cards/A1/2"
+    source = _source()
+    source.card_urls["A1"] = [good_url, bad_url]
+    source.card_pages[bad_url] = FetchError("unavailable")
+
+    result = collect_card_catalog(
+        CardCollectionOptions(resume=False), source, tmp_path
+    )
+
+    assert result.collected_count == 1
+    assert result.skipped_count == 0
+    assert [failure.item_id for failure in result.failures] == [bad_url]
+    assert [card["url"] for card in result.summary.cards] == [good_url]

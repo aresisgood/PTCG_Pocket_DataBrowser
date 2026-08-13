@@ -40,6 +40,11 @@ class CardCollectionOptions:
     save_every: int = 50
 
 
+@dataclass(frozen=True, slots=True)
+class CardCollectionSummary:
+    cards: list[dict[str, Any]]
+
+
 @dataclass(slots=True)
 class InMemoryCardSource:
     sets: list[dict[str, Any]]
@@ -125,7 +130,7 @@ def collect_card_catalog(
     output_directory: Path,
     *,
     log: Logger = print,
-) -> CollectionResult:
+) -> CollectionResult[CardCollectionSummary]:
     output_path = output_directory / "cards.json"
     checkpoint_path = output_directory / "cards.checkpoint.json"
     failure_path = output_directory / "failed_urls.json"
@@ -138,6 +143,8 @@ def collect_card_catalog(
         sets = sets[:2]
 
     failures: list[CollectionFailure] = []
+    collected_count = 0
+    skipped_count = 0
     processed_since_save = 0
     for set_info in sets:
         set_id = set_info["set_id"]
@@ -148,6 +155,7 @@ def collect_card_catalog(
             continue
         for url in urls:
             if url in collected:
+                skipped_count += 1
                 continue
             try:
                 card = parse_card_page(source.get_card_page(url), url)
@@ -156,6 +164,7 @@ def collect_card_catalog(
                 failures.append(CollectionFailure(url, str(exc)))
                 continue
             collected[url] = card
+            collected_count += 1
             processed_since_save += 1
             if processed_since_save >= options.save_every:
                 _write_json(checkpoint_path, list(collected.values()))
@@ -167,13 +176,13 @@ def collect_card_catalog(
     _write_json(failure_path, [failure.item_id for failure in failures])
     log(f"done: {len(cards)} cards, {len(failures)} failure(s) -> {output_path}")
     return CollectionResult(
-        collected_count=len(cards),
-        skipped_count=len(failures),
+        collected_count=collected_count,
+        skipped_count=skipped_count,
         failures=failures,
         artifacts={
             "catalog": output_path,
             "checkpoint": checkpoint_path,
             "failures": failure_path,
         },
-        summary={"cards": cards},
+        summary=CardCollectionSummary(cards=cards),
     )

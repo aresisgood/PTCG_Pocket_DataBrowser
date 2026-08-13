@@ -37,8 +37,8 @@ def test_unknown_winner_is_skipped_and_reported(tmp_path):
     )
 
     assert result.collected_count == 1
-    assert result.summary["dataset"]["matches"] == []
-    assert set(result.summary["dataset"]) == {
+    assert result.summary.dataset["matches"] == []
+    assert set(result.summary.dataset) == {
         "matches", "meta", "names", "decklists", "tournaments"
     }
     assert result.warnings == [
@@ -60,12 +60,15 @@ def test_failed_tournament_is_excluded_from_provenance_and_reported(tmp_path):
         TournamentCollectionOptions(min_players=0), source, tmp_path
     )
 
-    assert [item["id"] for item in result.summary["dataset"]["tournaments"]] == [
+    assert [item["id"] for item in result.summary.dataset["tournaments"]] == [
         "good"
     ]
     assert result.collected_count == 1
+    assert result.skipped_count == 0
     assert result.failures[0].item_id == "bad"
-    assert result.summary["selected_tournaments"] == 2
+    assert result.summary.selected_tournaments == 2
+    assert result.summary.successful_tournament_ids == ["good"]
+    assert result.summary.failed_tournament_ids == ["bad"]
 
 
 def test_tournament_http_source_closes_only_an_internally_created_session(monkeypatch):

@@ -1,18 +1,18 @@
 """卡牌 schema 與驗證。
 
-權威的卡牌紀錄是純 ``dict``（可 JSON 序列化、對前端友善）。``empty_card``
-提供一個依慣例不可變的範本,讓每張解析出的卡都帶有完整欄位;
-``validate_card`` 則在卡牌被持久化前,於系統邊界強制執行最低契約。
+``CardSchema`` 是欄位、預設值與靜態型別的單一權威定義，也提供 mapping
+相容介面給 parser 使用。持久化邊界透過 ``to_dict`` 產生既有 JSON shape。
 """
 from __future__ import annotations
 
+from collections.abc import Iterator, MutableMapping
 from dataclasses import asdict, dataclass, field, fields
 from typing import Any
 
 # 完整欄位集合。順序對齊既有的 ptcgpocket_cards.json 以維持連續性,
 # 並在最後附加 image_url。
 @dataclass(slots=True)
-class CardSchema:
+class CardSchema(MutableMapping[str, Any]):
     """Authoritative field and default definition for card artifacts."""
 
     url: str = ""
@@ -37,6 +37,39 @@ class CardSchema:
     set_name: str = ""
     image_url: str = ""
 
+    def __getitem__(self, key: str) -> Any:
+        if key not in CARD_KEYS or not hasattr(self, key):
+            raise KeyError(key)
+        return getattr(self, key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if key not in CARD_KEYS:
+            raise KeyError(key)
+        setattr(self, key, value)
+
+    def __delitem__(self, key: str) -> None:
+        if key not in CARD_KEYS or not hasattr(self, key):
+            raise KeyError(key)
+        delattr(self, key)
+
+    def __iter__(self) -> Iterator[str]:
+        return (key for key in CARD_KEYS if hasattr(self, key))
+
+    def __len__(self) -> int:
+        return sum(hasattr(self, key) for key in CARD_KEYS)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> CardSchema:
+        unknown = set(data) - set(CARD_KEYS)
+        if unknown:
+            raise ValueError(f"unknown card keys: {sorted(unknown)}")
+        card = cls()
+        card.update(data)
+        return card
+
 
 CARD_KEYS: tuple[str, ...] = tuple(item.name for item in fields(CardSchema))
 
@@ -48,19 +81,19 @@ ENERGY_MAP: dict[str, str] = {
 }
 
 
-def empty_card() -> dict[str, Any]:
-    """回傳一個所有欄位皆已預設的全新卡牌 dict。
+def empty_card() -> CardSchema:
+    """回傳一個所有欄位皆已預設的全新卡牌物件。
 
     永遠回傳新物件,呼叫端絕不會共享可變狀態。
     """
-    return asdict(CardSchema())
+    return CardSchema()
 
 
 class CardValidationError(ValueError):
     """在解析出的卡牌未通過最低 schema 契約時拋出。"""
 
 
-def validate_card(card: dict[str, Any]) -> dict[str, Any]:
+def validate_card(card: CardSchema) -> CardSchema:
     """在持久化邊界驗證卡牌;原樣回傳。
 
     以清晰訊息快速失敗,而非默默持久化垃圾資料。

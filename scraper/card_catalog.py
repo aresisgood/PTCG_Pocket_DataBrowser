@@ -12,7 +12,7 @@ import requests
 
 from .config import CARDS_INDEX_URL, REQUEST_DELAY
 from .fetch import FetchError
-from .models import CardValidationError, validate_card
+from .models import CardSchema, CardValidationError, validate_card
 from .parse import parse_card_page
 from .results import CollectionFailure, CollectionResult
 from .sets import parse_card_urls, parse_sets
@@ -42,7 +42,7 @@ class CardCollectionOptions:
 
 @dataclass(frozen=True, slots=True)
 class CardCollectionSummary:
-    cards: list[dict[str, Any]]
+    cards: list[CardSchema]
 
 
 @dataclass(slots=True)
@@ -112,15 +112,16 @@ def _write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _load_checkpoint(path: Path) -> dict[str, dict[str, Any]]:
+def _load_checkpoint(path: Path) -> dict[str, CardSchema]:
     if not path.exists():
         return {}
     try:
         cards = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(cards, list):
             raise TypeError("checkpoint root must be a list")
-        return {card["url"]: card for card in cards}
-    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        parsed_cards = [CardSchema.from_dict(card) for card in cards]
+        return {card.url: card for card in parsed_cards}
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         raise CollectionError(f"malformed checkpoint {path}: {exc}") from exc
 
 
@@ -167,12 +168,16 @@ def collect_card_catalog(
             collected_count += 1
             processed_since_save += 1
             if processed_since_save >= options.save_every:
-                _write_json(checkpoint_path, list(collected.values()))
+                _write_json(
+                    checkpoint_path,
+                    [card.to_dict() for card in collected.values()],
+                )
                 processed_since_save = 0
 
     cards = list(collected.values())
-    _write_json(checkpoint_path, cards)
-    _write_json(output_path, cards)
+    artifact_cards = [card.to_dict() for card in cards]
+    _write_json(checkpoint_path, artifact_cards)
+    _write_json(output_path, artifact_cards)
     _write_json(failure_path, [failure.item_id for failure in failures])
     log(f"done: {len(cards)} cards, {len(failures)} failure(s) -> {output_path}")
     return CollectionResult(

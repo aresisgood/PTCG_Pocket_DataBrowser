@@ -6,5 +6,6 @@
     parse    - HTML -> 卡牌 dict（純函式,不涉及網路）
     fetch    - HTTP 層（重試、限流）
     sets     - 卡包清單與卡牌 URL 探索
-    pipeline - 主流程,含 checkpoint / 續爬
+    card_catalog       - 卡牌目錄的最高層蒐集介面
+    tournament_dataset - 賽事資料集的最高層蒐集介面
 """

@@ -8,11 +8,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from scraper.config import DATA_DIR
+from project_config import ANALYSIS_JSON, CARDS_JSON, MODEL_PATH
 
-ANALYSIS_JSON = DATA_DIR / "analysis.json"
-CARDS_JSON = DATA_DIR / "cards.json"
-MODEL_PATH = DATA_DIR / "model.joblib"
 
 
 class AnalysisStore:

@@ -4,7 +4,13 @@
 """
 from __future__ import annotations
 
-from pathlib import Path
+from project_config import (
+    CARD_CHECKPOINT_JSON as CHECKPOINT_JSON,
+    CARDS_JSON as OUTPUT_JSON,
+    DATA_DIR,
+    FAILED_CARD_URLS_JSON as FAILED_URLS_JSON,
+    ROOT,
+)
 
 BASE_URL = "https://pocket.limitlesstcg.com"
 CARDS_INDEX_URL = f"{BASE_URL}/cards"
@@ -25,10 +31,3 @@ RATE_LIMIT_WAIT = 15     # 遇到 HTTP 429 時的基礎等待秒數（無 Retry-
 
 # 每爬 N 張卡就寫一次 checkpoint,讓崩潰時不致遺失太多進度。
 SAVE_EVERY = 50
-
-# 路徑（相對於 repo 根目錄）。
-ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "data"
-OUTPUT_JSON = DATA_DIR / "cards.json"
-CHECKPOINT_JSON = DATA_DIR / "cards.checkpoint.json"
-FAILED_URLS_JSON = DATA_DIR / "failed_urls.json"

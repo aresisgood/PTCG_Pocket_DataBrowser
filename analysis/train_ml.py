@@ -12,12 +12,11 @@ import numpy as np
 from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
 from sklearn.model_selection import train_test_split
 
-from scraper.config import DATA_DIR
+from project_config import DATA_DIR, MODEL_PATH
 
 from .matchups import matchup_table
 from .model import archetype_features, train_model
 
-MODEL_PATH = DATA_DIR / "model.joblib"
 
 
 def load_card_index() -> dict[str, dict[str, Any]]:
@@ -99,7 +98,7 @@ def build_and_save(dataset: dict[str, Any],
 
 def main() -> None:
     """CLI:python -m analysis.train_ml — 評估、訓練並存檔模型。"""
-    from scraper.tournaments import DATASET_JSON
+    from project_config import TOURNAMENT_DATASET_JSON as DATASET_JSON
 
     dataset = json.loads(DATASET_JSON.read_text(encoding="utf-8"))
     card_index = load_card_index()

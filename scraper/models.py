@@ -6,16 +6,39 @@
 """
 from __future__ import annotations
 
+from dataclasses import asdict, dataclass, field, fields
 from typing import Any
 
 # 完整欄位集合。順序對齊既有的 ptcgpocket_cards.json 以維持連續性,
 # 並在最後附加 image_url。
-CARD_KEYS: tuple[str, ...] = (
-    "url", "set_id", "number", "name", "card_type", "trainer_type", "element",
-    "stage", "evolves_from", "hp", "weakness", "retreat_cost", "ability_name",
-    "ability_text", "attacks", "effect", "rarity", "pack", "illustrator",
-    "set_name", "image_url",
-)
+@dataclass(slots=True)
+class CardSchema:
+    """Authoritative field and default definition for card artifacts."""
+
+    url: str = ""
+    set_id: str = ""
+    number: str = ""
+    name: str = ""
+    card_type: str = ""
+    trainer_type: str = ""
+    element: str = ""
+    stage: str = ""
+    evolves_from: str = ""
+    hp: int | None = None
+    weakness: str = ""
+    retreat_cost: int = 0
+    ability_name: str = ""
+    ability_text: str = ""
+    attacks: list[dict[str, Any]] = field(default_factory=list)
+    effect: str = ""
+    rarity: str = ""
+    pack: str = ""
+    illustrator: str = ""
+    set_name: str = ""
+    image_url: str = ""
+
+
+CARD_KEYS: tuple[str, ...] = tuple(item.name for item in fields(CardSchema))
 
 # 能量字母 -> 屬性名稱（limitlesstcg 使用的 PTCG 字型編碼）。
 ENERGY_MAP: dict[str, str] = {
@@ -30,13 +53,7 @@ def empty_card() -> dict[str, Any]:
 
     永遠回傳新物件,呼叫端絕不會共享可變狀態。
     """
-    return {
-        "url": "", "set_id": "", "number": "", "name": "", "card_type": "",
-        "trainer_type": "", "element": "", "stage": "", "evolves_from": "",
-        "hp": None, "weakness": "", "retreat_cost": 0, "ability_name": "",
-        "ability_text": "", "attacks": [], "effect": "", "rarity": "",
-        "pack": "", "illustrator": "", "set_name": "", "image_url": "",
-    }
+    return asdict(CardSchema())
 
 
 class CardValidationError(ValueError):

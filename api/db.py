@@ -8,7 +8,7 @@ from fastapi import Request
 from sqlalchemy.engine import Engine, make_url
 from sqlmodel import Session, SQLModel, create_engine
 
-from scraper.config import DATA_DIR
+from project_config import DATA_DIR
 
 DB_PATH = DATA_DIR / "decks.db"
 DEFAULT_DATABASE_URL = f"sqlite:///{DB_PATH.as_posix()}"

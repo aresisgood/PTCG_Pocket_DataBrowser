@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Generic, TypeVar
+
+SummaryT = TypeVar("SummaryT")
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,10 +16,10 @@ class CollectionFailure:
 
 
 @dataclass(slots=True)
-class CollectionResult:
+class CollectionResult(Generic[SummaryT]):
+    summary: SummaryT
     collected_count: int = 0
     skipped_count: int = 0
     failures: list[CollectionFailure] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     artifacts: dict[str, Path] = field(default_factory=dict)
-    summary: dict[str, Any] = field(default_factory=dict)

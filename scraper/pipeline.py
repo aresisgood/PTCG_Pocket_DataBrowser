@@ -37,4 +37,4 @@ def scrape(
             result = collect_card_catalog(
                 options, http_source, output_directory, log=log
             )
-    return result.summary["cards"]
+    return result.summary.cards

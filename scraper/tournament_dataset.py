@@ -36,6 +36,14 @@ class TournamentCollectionOptions:
     max_tournaments: int = 20
 
 
+@dataclass(frozen=True, slots=True)
+class TournamentCollectionSummary:
+    selected_tournaments: int
+    successful_tournament_ids: list[str]
+    failed_tournament_ids: list[str]
+    dataset: dict[str, Any]
+
+
 @dataclass(slots=True)
 class InMemoryTournamentSource:
     tournaments: list[dict[str, Any]]
@@ -103,8 +111,9 @@ def _build_matches(
     standings: dict[str, dict[str, Any]],
     pairings: list[dict[str, Any]],
     warnings: list[str],
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], int]:
     matches: list[dict[str, Any]] = []
+    skipped_count = 0
     for pairing in parse_pairings(pairings):
         player1 = pairing["player1"]
         player2 = pairing["player2"]
@@ -113,12 +122,14 @@ def _build_matches(
             warnings.append(
                 f"tournament {tournament_id}: skipped pairing with unknown player"
             )
+            skipped_count += 1
             continue
         if winner not in standings:
             warnings.append(
                 f"tournament {tournament_id}: skipped pairing with unknown winner "
                 f"{winner!r}"
             )
+            skipped_count += 1
             continue
         matches.append(
             {
@@ -127,7 +138,7 @@ def _build_matches(
                 "winner_deck": standings[winner]["deck_id"],
             }
         )
-    return matches
+    return matches, skipped_count
 
 
 def collect_tournament_dataset(
@@ -136,7 +147,7 @@ def collect_tournament_dataset(
     output_directory: Path,
     *,
     log: Logger = print,
-) -> CollectionResult:
+) -> CollectionResult[TournamentCollectionSummary]:
     selected = select_tournaments(
         source.list_tournaments(max(100, options.max_tournaments)),
         min_players=options.min_players,
@@ -149,6 +160,7 @@ def collect_tournament_dataset(
     names: dict[str, str] = {}
     decklists: dict[str, Any] = {}
     included: list[dict[str, Any]] = []
+    skipped_count = 0
 
     for tournament in selected:
         tournament_id = tournament["id"]
@@ -159,14 +171,14 @@ def collect_tournament_dataset(
             failures.append(CollectionFailure(tournament_id, str(exc)))
             log(f"  ! skipped {tournament.get('name', '')}: {exc}")
             continue
-        matches.extend(
-            _build_matches(
-                tournament_id,
-                standings,
-                pairings,
-                warnings,
-            )
+        tournament_matches, tournament_skipped = _build_matches(
+            tournament_id,
+            standings,
+            pairings,
+            warnings,
         )
+        matches.extend(tournament_matches)
+        skipped_count += tournament_skipped
         for info in standings.values():
             deck_id = info["deck_id"]
             meta[deck_id] += 1
@@ -199,14 +211,14 @@ def collect_tournament_dataset(
     )
     return CollectionResult(
         collected_count=len(included),
-        skipped_count=len(failures),
+        skipped_count=skipped_count,
         failures=failures,
         warnings=warnings,
         artifacts={"dataset": artifact},
-        summary={
-            "selected_tournaments": len(selected),
-            "successful_tournament_ids": [item["id"] for item in included],
-            "failed_tournament_ids": [failure.item_id for failure in failures],
-            "dataset": dataset,
-        },
+        summary=TournamentCollectionSummary(
+            selected_tournaments=len(selected),
+            successful_tournament_ids=[item["id"] for item in included],
+            failed_tournament_ids=[failure.item_id for failure in failures],
+            dataset=dataset,
+        ),
     )

@@ -177,7 +177,7 @@ def collect(
         result = collect_tournament_dataset(
             options, source, TOURNAMENTS_DIR, log=log
         )
-    return result.summary["dataset"]
+    return result.summary.dataset
 
 
 if __name__ == "__main__":

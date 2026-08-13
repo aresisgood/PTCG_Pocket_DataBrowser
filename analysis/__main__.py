@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import argparse
 
-from scraper.tournaments import DATASET_JSON
+from project_config import TOURNAMENT_DATASET_JSON as DATASET_JSON
 
 from .build import ANALYSIS_JSON, build_from_file
 

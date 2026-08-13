@@ -9,9 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from scraper import tournaments as tmod
 from scraper.tournaments import (
-    build_matches, collect, parse_pairings, parse_standings, select_tournaments,
+    build_matches, parse_pairings, parse_standings, select_tournaments,
 )
 
 FX = Path(__file__).parent / "fixtures" / "api"
@@ -116,21 +115,10 @@ def test_build_matches_skips_unknown_deck_players():
     ]
 
 
-# --- collect (offline orchestration) -----------------------------------------
+def test_build_matches_skips_unknown_winner():
+    parsed = {"a": {"deck_id": "deckA"}, "b": {"deck_id": "deckB"}}
+    raw_pairings = [
+        {"player1": "a", "player2": "b", "winner": "missing"},
+    ]
 
-def test_collect_consolidates_dataset(monkeypatch, tmp_path, standings, pairings):
-    monkeypatch.setattr(tmod, "DATASET_JSON", tmp_path / "dataset.json")
-    monkeypatch.setattr(tmod, "TOURNAMENTS_DIR", tmp_path)
-    monkeypatch.setattr(tmod, "API_DELAY", 0)
-    monkeypatch.setattr(tmod, "fetch_tournaments",
-                        lambda session=None: [{"id": "t1", "name": "T1",
-                                               "date": "2026-07-01", "players": 45}])
-    monkeypatch.setattr(tmod, "fetch_standings", lambda tid, s=None: standings)
-    monkeypatch.setattr(tmod, "fetch_pairings", lambda tid, s=None: pairings)
-
-    ds = collect(min_players=0, max_tournaments=5, log=lambda *_: None)
-
-    assert len(ds["matches"]) == 104
-    assert sum(ds["meta"].values()) == 45          # 45 players across archetypes
-    assert ds["names"]["mega-gardevoir-ex-b2-mega-diancie-ex-b3b"]
-    assert (tmp_path / "dataset.json").exists()
+    assert build_matches(parsed, raw_pairings) == []

@@ -83,7 +83,7 @@ def test_card_cli_reports_an_interrupt_with_no_progress(monkeypatch, capsys):
         card_cli.main()
 
     assert excinfo.value.code == 130
-    assert "沒有任何檔案被修改" in capsys.readouterr().out
+    assert "權威檔案未被修改" in capsys.readouterr().out
 
 
 def test_card_cli_reports_a_refused_publish_without_traceback(monkeypatch, capsys):
@@ -115,3 +115,56 @@ def test_card_cli_reports_a_bare_interrupt_as_clean_exit(monkeypatch, capsys):
 
     assert excinfo.value.code == 130
     assert "已中斷" in capsys.readouterr().out
+
+def test_card_cli_passes_the_allow_shrink_flag_through(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(sys, "argv", ["scraper", "--allow-shrink"])
+    monkeypatch.setattr(card_cli, "HttpCardSource", ContextSource)
+    monkeypatch.setattr(
+        card_cli,
+        "collect_card_catalog",
+        lambda options, source, output: captured.update(options=options),
+    )
+
+    card_cli.main()
+
+    assert captured["options"].allow_shrink is True
+
+
+def test_card_cli_does_not_claim_artifacts_are_untouched_on_a_late_interrupt(
+    monkeypatch, capsys
+):
+    monkeypatch.setattr(sys, "argv", ["scraper"])
+    monkeypatch.setattr(card_cli, "HttpCardSource", ContextSource)
+
+    def interrupted(options, source, output):
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(card_cli, "collect_card_catalog", interrupted)
+
+    with pytest.raises(SystemExit) as excinfo:
+        card_cli.main()
+
+    output = capsys.readouterr().out
+    assert excinfo.value.code == 130
+    assert "沒有任何檔案被修改" not in output
+    assert "data/cards.json" in output
+
+def test_card_cli_tells_a_resumable_interrupt_apart(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["scraper"])
+    monkeypatch.setattr(card_cli, "HttpCardSource", ContextSource)
+
+    def interrupted(options, source, output):
+        raise card_cli.CollectionInterrupted(
+            7, output / "cards.checkpoint.json", resumable=True
+        )
+
+    monkeypatch.setattr(card_cli, "collect_card_catalog", interrupted)
+
+    with pytest.raises(SystemExit) as excinfo:
+        card_cli.main()
+
+    output = capsys.readouterr().out
+    assert excinfo.value.code == 130
+    assert "重新執行即可續爬" in output
+    assert "不會自動續用" not in output

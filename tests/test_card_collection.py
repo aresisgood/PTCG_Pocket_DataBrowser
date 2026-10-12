@@ -306,3 +306,155 @@ def test_write_failure_leaves_the_previous_artifact_intact(tmp_path, monkeypatch
         card_catalog._write_json(target, [{"url": "https://example.test/new"}])
 
     assert json.loads(target.read_text(encoding="utf-8")) == previous
+
+def _failing_source():
+    """A source whose every card fetch fails."""
+    source = _source()
+    for url in source.card_urls["A1"]:
+        source.card_pages[url] = FetchError("unavailable")
+    return source
+
+
+def test_unreadable_catalog_blocks_publishing_instead_of_assuming_zero(tmp_path):
+    output_path = tmp_path / "cards.json"
+    output_path.write_text("{truncated", encoding="utf-8")
+
+    with pytest.raises(CollectionError, match="cannot read"):
+        collect_card_catalog(CardCollectionOptions(resume=False), _source(), tmp_path)
+
+    assert output_path.read_text(encoding="utf-8") == "{truncated"
+
+
+def test_catalog_floor_falls_back_to_the_checkpoint(tmp_path):
+    checkpoint_path = tmp_path / "cards.checkpoint.json"
+    checkpoint_path.write_text(
+        json.dumps(
+            [
+                {"url": f"https://example.test/{index}", "name": "Complete"}
+                for index in range(5)
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(CollectionError, match="refusing to shrink"):
+        collect_card_catalog(CardCollectionOptions(resume=False), _source(), tmp_path)
+
+    assert len(json.loads(checkpoint_path.read_text(encoding="utf-8"))) == 5
+    assert not (tmp_path / "cards.json").exists()
+
+
+def test_refusal_names_the_override_flag(tmp_path):
+    (tmp_path / "cards.json").write_text(
+        json.dumps([{"url": "https://example.test/0"}, {"url": "https://example.test/1"}]),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(CollectionError, match="--allow-shrink"):
+        collect_card_catalog(CardCollectionOptions(resume=False), _source(), tmp_path)
+
+
+def test_unreadable_checkpoint_does_not_block_a_fresh_rebuild(tmp_path):
+    (tmp_path / "cards.checkpoint.json").write_text("{truncated", encoding="utf-8")
+    messages = []
+
+    result = collect_card_catalog(
+        CardCollectionOptions(resume=False), _source(), tmp_path, log=messages.append
+    )
+
+    assert result.collected_count == 1
+    assert len(json.loads((tmp_path / "cards.json").read_text(encoding="utf-8"))) == 1
+    assert any("unreadable checkpoint" in message for message in messages)
+
+
+def test_an_empty_result_is_never_published(tmp_path):
+    with pytest.raises(CollectionError, match="refusing to publish an empty catalog"):
+        collect_card_catalog(
+            CardCollectionOptions(resume=False), _failing_source(), tmp_path
+        )
+
+    assert not (tmp_path / "cards.json").exists()
+    assert not (tmp_path / "cards.checkpoint.json").exists()
+
+
+def test_allow_shrink_publishes_a_smaller_catalog(tmp_path):
+    output_path = tmp_path / "cards.json"
+    output_path.write_text(
+        json.dumps(
+            [
+                {"url": f"https://example.test/{index}", "name": "Complete"}
+                for index in range(5)
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = collect_card_catalog(
+        CardCollectionOptions(resume=False, allow_shrink=True), _source(), tmp_path
+    )
+
+    assert result.collected_count == 1
+    assert len(json.loads(output_path.read_text(encoding="utf-8"))) == 1
+    assert not (tmp_path / "cards.fresh.checkpoint.json").exists()
+
+
+def test_allow_shrink_does_not_license_an_empty_catalog(tmp_path):
+    with pytest.raises(CollectionError, match="refusing to publish an empty catalog"):
+        collect_card_catalog(
+            CardCollectionOptions(resume=False, allow_shrink=True),
+            _failing_source(),
+            tmp_path,
+        )
+
+
+def test_interrupted_fresh_progress_is_marked_unresumable(tmp_path):
+    source, _ = _two_card_source_interrupting_on_second()
+
+    with pytest.raises(CollectionInterrupted) as excinfo:
+        collect_card_catalog(CardCollectionOptions(resume=False), source, tmp_path)
+
+    assert excinfo.value.resumable is False
+
+
+def test_interrupted_resume_progress_is_marked_resumable(tmp_path):
+    source, _ = _two_card_source_interrupting_on_second()
+
+    with pytest.raises(CollectionInterrupted) as excinfo:
+        collect_card_catalog(CardCollectionOptions(), source, tmp_path)
+
+    assert excinfo.value.resumable is True
+
+def test_refusal_persists_progress_so_a_rerun_need_not_refetch(tmp_path):
+    (tmp_path / "cards.json").write_text(
+        json.dumps(
+            [
+                {"url": f"https://example.test/{index}", "name": "Complete"}
+                for index in range(3)
+            ]
+        ),
+        encoding="utf-8",
+    )
+    url = "https://pocket.limitlesstcg.com/cards/A1/1"
+
+    with pytest.raises(CollectionError, match="refusing to shrink"):
+        collect_card_catalog(CardCollectionOptions(), _source(), tmp_path)
+
+    checkpoint = json.loads(
+        (tmp_path / "cards.checkpoint.json").read_text(encoding="utf-8")
+    )
+    assert [card["url"] for card in checkpoint] == [url]
+
+    # A source that can no longer serve any page: the re-run must be satisfied
+    # by the checkpoint alone, proving the refusal cost no repeated fetches.
+    offline = InMemoryCardSource(
+        sets=[{"set_id": "A1", "name": "Genetic Apex"}],
+        card_urls={"A1": [url]},
+        card_pages={},
+    )
+    result = collect_card_catalog(
+        CardCollectionOptions(allow_shrink=True), offline, tmp_path
+    )
+
+    assert result.collected_count == 0
+    assert result.skipped_count == 1
+    assert len(json.loads((tmp_path / "cards.json").read_text(encoding="utf-8"))) == 1

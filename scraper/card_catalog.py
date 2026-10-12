@@ -24,6 +24,7 @@ CATALOG_FILENAME = "cards.json"
 CHECKPOINT_FILENAME = "cards.checkpoint.json"
 FRESH_PROGRESS_FILENAME = "cards.fresh.checkpoint.json"
 FAILURE_FILENAME = "failed_urls.json"
+TEMPORARY_SUFFIX = ".tmp"
 
 
 class CollectionError(RuntimeError):
@@ -42,6 +43,8 @@ class CollectionInterrupted(KeyboardInterrupt):
         collected_count: int,
         progress_path: Path | None = None,
         failure_count: int = 0,
+        *,
+        resumable: bool = False,
     ) -> None:
         location = (
             f"progress saved to {progress_path}"
@@ -55,6 +58,7 @@ class CollectionInterrupted(KeyboardInterrupt):
         self.collected_count = collected_count
         self.progress_path = progress_path
         self.failure_count = failure_count
+        self.resumable = resumable
 
 
 class CardSource(Protocol):
@@ -71,6 +75,7 @@ class CardCollectionOptions:
     only_set: str | None = None
     resume: bool = True
     save_every: int = 50
+    allow_shrink: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,7 +148,7 @@ class HttpCardSource:
 def _write_json(path: Path, data: Any) -> None:
     """Replace ``path`` atomically, so an interrupt cannot truncate it."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    staging = path.with_name(f"{path.name}.tmp")
+    staging = path.with_name(f"{path.name}{TEMPORARY_SUFFIX}")
     staging.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     os.replace(staging, path)
 
@@ -182,7 +187,12 @@ class _CatalogPaths:
 
 @dataclass(slots=True)
 class _CollectionProgress:
-    """Accumulated state of a single collection run."""
+    """Accumulated state of a single collection run.
+
+    Deliberately mutable, unlike ``_CatalogPaths``: the gathering loop has to
+    leave partial state behind that survives a ``KeyboardInterrupt``, and
+    copying the card dictionary per card would make a 3900-card run quadratic.
+    """
 
     collected: dict[str, CardSchema]
     failures: list[CollectionFailure] = field(default_factory=list)
@@ -238,34 +248,94 @@ def _gather_cards(
                 processed_since_save = 0
 
 
-def _catalog_size(path: Path) -> int:
-    """Count the cards already published, treating anything unreadable as none."""
+def _card_count(path: Path) -> int:
+    """Count the cards in a published artifact, refusing to guess if unreadable."""
     if not path.exists():
         return 0
     try:
         published = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return 0
-    return len(published) if isinstance(published, list) else 0
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise CollectionError(
+            f"cannot read {path} to size the existing catalog: {exc}. "
+            "Repair it or move it aside before collecting."
+        ) from exc
+    if not isinstance(published, list):
+        raise CollectionError(
+            f"cannot read {path} to size the existing catalog: expected a list, "
+            f"found {type(published).__name__}."
+        )
+    return len(published)
+
+
+def _catalog_floor(paths: _CatalogPaths, log: Logger) -> int:
+    """The card count a new catalog must not fall below.
+
+    The published catalog is authoritative, so an unreadable one stops the run.
+    The checkpoint is working state that a fresh rebuild is meant to replace, so
+    an unreadable one only loses its vote - loudly, never silently.
+    """
+    floor = _card_count(paths.catalog)
+    try:
+        return max(floor, _card_count(paths.checkpoint))
+    except CollectionError as exc:
+        log(f"warning: unreadable checkpoint ignored while sizing the catalog: {exc}")
+        return floor
+
+
+def _refuse_publication(
+    progress: _CollectionProgress,
+    paths: _CatalogPaths,
+    options: CardCollectionOptions,
+    reason: str,
+) -> CollectionError:
+    """Keep the collected cards reachable, then explain how to proceed.
+
+    In resume mode the landing spot is the canonical checkpoint: ``collected``
+    started from it and only ever grew, so writing it back cannot shrink it, and
+    a re-run then skips every card this run already fetched.
+    """
+    landing = paths.checkpoint if options.resume else paths.staging
+    if progress.collected:
+        _write_json(landing, progress.as_artifact())
+    recovery = (
+        f"The {progress.collected_count} collected card(s) are in {landing}, so "
+        "a re-run resumes from there."
+        if options.resume
+        else f"The {progress.collected_count} collected card(s) are staged in "
+        f"{landing} for inspection; a re-run collects them again."
+    )
+    return CollectionError(f"{reason} {recovery}")
 
 
 def _publish_catalog(
     progress: _CollectionProgress,
     paths: _CatalogPaths,
+    options: CardCollectionOptions,
     log: Logger,
 ) -> CollectionResult[CardCollectionSummary]:
     artifact_cards = progress.as_artifact()
-    published_count = _catalog_size(paths.catalog)
-    # A scoped re-scrape (--set/--test) or a run where every fetch failed would
-    # otherwise publish a handful of cards over the full catalog. Refuse instead,
-    # and keep the work staged so nothing has to be fetched twice.
-    if len(artifact_cards) < published_count:
-        _write_json(paths.staging, artifact_cards)
-        raise CollectionError(
-            f"refusing to shrink {paths.catalog} from {published_count} to "
-            f"{len(artifact_cards)} card(s); the collected cards are staged in "
-            f"{paths.staging}. Re-run without --set/--test, or back up and "
-            "remove the catalog if the smaller result is intended."
+    # An empty catalog is never a legitimate result, so --allow-shrink cannot
+    # license one: every fetch failing looks identical to the site disappearing.
+    if not artifact_cards:
+        raise _refuse_publication(
+            progress,
+            paths,
+            options,
+            f"refusing to publish an empty catalog to {paths.catalog} after "
+            f"{len(progress.failures)} failure(s).",
+        )
+
+    # A scoped re-scrape (--set/--test), or a run that lost cards to failures,
+    # would otherwise publish a fraction of the catalog over the whole of it.
+    floor = _catalog_floor(paths, log)
+    if len(artifact_cards) < floor and not options.allow_shrink:
+        raise _refuse_publication(
+            progress,
+            paths,
+            options,
+            f"refusing to shrink {paths.catalog} from {floor} to "
+            f"{len(artifact_cards)} card(s). Re-run with --allow-shrink to "
+            "publish anyway, or without --set/--test to collect the full catalog.",
         )
 
     _write_json(paths.checkpoint, artifact_cards)
@@ -327,7 +397,10 @@ def collect_card_catalog(
         )
         # The operator chose to stop, so the original traceback adds nothing.
         raise CollectionInterrupted(
-            progress.collected_count, staged, len(progress.failures)
+            progress.collected_count,
+            staged,
+            len(progress.failures),
+            resumable=options.resume,
         ) from None
 
-    return _publish_catalog(progress, paths, log)
+    return _publish_catalog(progress, paths, options, log)

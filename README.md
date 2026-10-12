@@ -57,7 +57,7 @@ DATABASE_URL=sqlite:///data/decks.db
 
 ## 蒐集與分析資料
 
-卡牌爬蟲從 [Limitless TCG](https://pocket.limitlesstcg.com) 讀取資料。它會將卡牌資料寫入 `data/cards.json`、將進度記錄在 `data/cards.checkpoint.json`，並將無法蒐集的 URL 寫入 `data/failed_urls.json`。
+卡牌爬蟲從 [Limitless TCG](https://pocket.limitlesstcg.com) 讀取資料。它會將卡牌資料寫入 `data/cards.json`、將進度記錄在 `data/cards.checkpoint.json`，並將無法蒐集的 URL 寫入 `data/failed_urls.json`。加上 `--no-resume` 的整批重爬會改將進度暫存到 `data/cards.fresh.checkpoint.json`，只在完整跑完後才覆寫上述權威檔案；中途按 Ctrl+C 時既有的 `data/cards.json` 與 checkpoint 保持原狀，暫存檔則留在原地供檢查。另外，若本次蒐集結果比既有 `data/cards.json` 還少（例如只用 `--set`／`--test` 重爬局部卡包，或整批抓取失敗），發布會被拒絕並保留暫存檔，不會把完整 catalog 覆寫成局部資料。
 
 ```bash
 python -m scraper --test

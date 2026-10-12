@@ -16,6 +16,8 @@ dist/
 
 # 爬蟲工作檔（保留權威的 data/cards.json 與 data/analysis.json）
 data/cards.checkpoint.json
+data/cards.fresh.checkpoint.json
+data/*.tmp
 data/failed_urls.json
 data/scrape_full.log
 data/collect.log

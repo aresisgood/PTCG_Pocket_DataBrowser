@@ -2,6 +2,8 @@
 
 import sys
 
+import pytest
+
 from scraper import __main__ as card_cli
 from scraper import tournaments as tournament_cli
 
@@ -51,3 +53,65 @@ def test_tournament_cli_preserves_existing_options(monkeypatch):
     assert captured["options"].min_players == 64
     assert captured["options"].after == "2026-01-01"
     assert captured["options"].max_tournaments == 7
+
+
+def test_card_cli_reports_interrupt_as_clean_exit(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["scraper"])
+    monkeypatch.setattr(card_cli, "HttpCardSource", ContextSource)
+
+    def interrupted(options, source, output):
+        raise card_cli.CollectionInterrupted(7, output / "cards.fresh.checkpoint.json")
+
+    monkeypatch.setattr(card_cli, "collect_card_catalog", interrupted)
+
+    with pytest.raises(SystemExit) as excinfo:
+        card_cli.main()
+
+    assert excinfo.value.code == 130
+    assert "cards.fresh.checkpoint.json" in capsys.readouterr().out
+
+def test_card_cli_reports_an_interrupt_with_no_progress(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["scraper"])
+    monkeypatch.setattr(card_cli, "HttpCardSource", ContextSource)
+
+    def interrupted(options, source, output):
+        raise card_cli.CollectionInterrupted(0)
+
+    monkeypatch.setattr(card_cli, "collect_card_catalog", interrupted)
+
+    with pytest.raises(SystemExit) as excinfo:
+        card_cli.main()
+
+    assert excinfo.value.code == 130
+    assert "沒有任何檔案被修改" in capsys.readouterr().out
+
+
+def test_card_cli_reports_a_refused_publish_without_traceback(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["scraper", "--set", "A1", "--no-resume"])
+    monkeypatch.setattr(card_cli, "HttpCardSource", ContextSource)
+
+    def refused(options, source, output):
+        raise card_cli.CollectionError("refusing to shrink cards.json from 3900 to 1")
+
+    monkeypatch.setattr(card_cli, "collect_card_catalog", refused)
+
+    with pytest.raises(SystemExit) as excinfo:
+        card_cli.main()
+
+    assert excinfo.value.code == 1
+    assert "refusing to shrink" in capsys.readouterr().out
+
+def test_card_cli_reports_a_bare_interrupt_as_clean_exit(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["scraper"])
+    monkeypatch.setattr(card_cli, "HttpCardSource", ContextSource)
+
+    def interrupted(options, source, output):
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(card_cli, "collect_card_catalog", interrupted)
+
+    with pytest.raises(SystemExit) as excinfo:
+        card_cli.main()
+
+    assert excinfo.value.code == 130
+    assert "已中斷" in capsys.readouterr().out

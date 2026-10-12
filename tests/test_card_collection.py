@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from scraper import card_catalog
+from scraper.config import CARDS_INDEX_URL
 from scraper.card_catalog import (
     CardCollectionOptions,
     CollectionError,
@@ -17,6 +18,23 @@ from scraper.models import CARD_KEYS, CardSchema
 import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+INDEX_HTML = """
+<table>
+  <tr><th>Set</th><th>Date</th><th>Cards</th></tr>
+  <tr>
+    <td><a href="/cards/A1">Genetic Apex A1</a></td>
+    <td>30 Oct 24</td><td>286</td>
+  </tr>
+</table>
+"""
+
+SET_HTML = """
+<div>
+  <a href="/cards/A1/1">Bulbasaur</a>
+  <a href="/decks/A1">not a card</a>
+</div>
+"""
 
 
 def _source():
@@ -458,3 +476,144 @@ def test_refusal_persists_progress_so_a_rerun_need_not_refetch(tmp_path):
     assert result.collected_count == 0
     assert result.skipped_count == 1
     assert len(json.loads((tmp_path / "cards.json").read_text(encoding="utf-8"))) == 1
+
+def test_only_set_collects_just_that_set(tmp_path):
+    source = _source()
+    source.sets.append({"set_id": "A2", "name": "Mythical Island"})
+    source.card_urls["A2"] = ["https://pocket.limitlesstcg.com/cards/A2/1"]
+
+    result = collect_card_catalog(
+        CardCollectionOptions(resume=False, only_set="A1"), source, tmp_path
+    )
+
+    assert result.collected_count == 1
+    assert [card["url"] for card in result.summary.cards] == [
+        "https://pocket.limitlesstcg.com/cards/A1/1"
+    ]
+
+
+def test_test_mode_collects_only_the_first_two_sets(tmp_path):
+    source = _source()
+    html = source.card_pages["https://pocket.limitlesstcg.com/cards/A1/1"]
+    for index in (2, 3):
+        set_id = f"A{index}"
+        url = f"https://pocket.limitlesstcg.com/cards/{set_id}/1"
+        source.sets.append({"set_id": set_id, "name": f"Set {set_id}"})
+        source.card_urls[set_id] = [url]
+        source.card_pages[url] = html
+
+    result = collect_card_catalog(
+        CardCollectionOptions(resume=False, test_mode=True), source, tmp_path
+    )
+
+    assert result.collected_count == 2
+    assert sorted(card["url"] for card in result.summary.cards) == [
+        "https://pocket.limitlesstcg.com/cards/A1/1",
+        "https://pocket.limitlesstcg.com/cards/A2/1",
+    ]
+
+
+def test_an_unreachable_set_page_is_reported_without_losing_other_sets(tmp_path):
+    source = _source()
+    source.sets.append({"set_id": "A2", "name": "Mythical Island"})
+
+    class UnreachableSetPage(InMemoryCardSource):
+        def list_card_urls(self, set_id):
+            if set_id == "A2":
+                raise FetchError("set page unavailable")
+            return super().list_card_urls(set_id)
+
+    result = collect_card_catalog(
+        CardCollectionOptions(resume=False),
+        UnreachableSetPage(
+            sets=source.sets,
+            card_urls=source.card_urls,
+            card_pages=source.card_pages,
+        ),
+        tmp_path,
+    )
+
+    assert result.collected_count == 1
+    assert [failure.item_id for failure in result.failures] == ["A2 (set page)"]
+    assert json.loads(
+        (tmp_path / "failed_urls.json").read_text(encoding="utf-8")
+    ) == ["A2 (set page)"]
+
+
+def test_a_checkpoint_that_is_not_a_list_is_rejected(tmp_path):
+    (tmp_path / "cards.checkpoint.json").write_text(
+        '{"url": "not-a-list"}', encoding="utf-8"
+    )
+
+    with pytest.raises(CollectionError, match="malformed checkpoint"):
+        collect_card_catalog(CardCollectionOptions(), _source(), tmp_path)
+
+
+def test_a_catalog_that_is_not_a_list_blocks_publishing(tmp_path):
+    output_path = tmp_path / "cards.json"
+    output_path.write_text('{"cards": []}', encoding="utf-8")
+
+    with pytest.raises(CollectionError, match="expected a list"):
+        collect_card_catalog(CardCollectionOptions(resume=False), _source(), tmp_path)
+
+    assert output_path.read_text(encoding="utf-8") == '{"cards": []}'
+
+class RecordingFetch:
+    """Stands in for ``fetch_html``, recording what the source asked for."""
+
+    def __init__(self, pages: dict[str, str]):
+        self.pages = pages
+        self.requested: list[str] = []
+
+    def __call__(self, url: str, session=None) -> str:
+        self.requested.append(url)
+        return self.pages[url]
+
+
+def test_http_source_reads_the_set_index(monkeypatch):
+    fetch = RecordingFetch({CARDS_INDEX_URL: INDEX_HTML})
+    monkeypatch.setattr("scraper.fetch.fetch_html", fetch)
+
+    with HttpCardSource(session=object(), delay=0) as source:
+        sets = source.list_sets()
+
+    assert fetch.requested == [CARDS_INDEX_URL]
+    assert [item["set_id"] for item in sets] == ["A1"]
+
+
+def test_http_source_reads_a_set_page(monkeypatch):
+    fetch = RecordingFetch({f"{CARDS_INDEX_URL}/A1": SET_HTML})
+    monkeypatch.setattr("scraper.fetch.fetch_html", fetch)
+
+    with HttpCardSource(session=object(), delay=0) as source:
+        urls = source.list_card_urls("A1")
+
+    assert fetch.requested == [f"{CARDS_INDEX_URL}/A1"]
+    assert urls == ["https://pocket.limitlesstcg.com/cards/A1/1"]
+
+
+def test_http_source_rate_limits_between_card_pages(monkeypatch):
+    url = "https://pocket.limitlesstcg.com/cards/A1/1"
+    html = (FIXTURES / "pokemon_basic_A1_1.html").read_text(encoding="utf-8")
+    monkeypatch.setattr("scraper.fetch.fetch_html", RecordingFetch({url: html}))
+    slept = []
+    monkeypatch.setattr(card_catalog.time, "sleep", slept.append)
+
+    with HttpCardSource(session=object(), delay=0.25) as source:
+        page = source.get_card_page(url)
+
+    assert page == html
+    assert slept == [0.25]
+
+
+def test_http_source_skips_the_delay_when_it_is_disabled(monkeypatch):
+    url = "https://pocket.limitlesstcg.com/cards/A1/1"
+    html = (FIXTURES / "pokemon_basic_A1_1.html").read_text(encoding="utf-8")
+    monkeypatch.setattr("scraper.fetch.fetch_html", RecordingFetch({url: html}))
+    slept = []
+    monkeypatch.setattr(card_catalog.time, "sleep", slept.append)
+
+    with HttpCardSource(session=object(), delay=0) as source:
+        source.get_card_page(url)
+
+    assert slept == []

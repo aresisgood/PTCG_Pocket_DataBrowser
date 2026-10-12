@@ -57,7 +57,17 @@ DATABASE_URL=sqlite:///data/decks.db
 
 ## 蒐集與分析資料
 
-卡牌爬蟲從 [Limitless TCG](https://pocket.limitlesstcg.com) 讀取資料。它會將卡牌資料寫入 `data/cards.json`、將進度記錄在 `data/cards.checkpoint.json`，並將無法蒐集的 URL 寫入 `data/failed_urls.json`。
+卡牌爬蟲從 [Limitless TCG](https://pocket.limitlesstcg.com) 讀取資料。它會將卡牌資料寫入 `data/cards.json`、將進度記錄在 `data/cards.checkpoint.json`，並將無法蒐集的 URL 寫入 `data/failed_urls.json`。所有檔案皆為原子寫入，中斷不會留下半截的 JSON。
+
+不變式：**一次不完整的蒐集永遠不會取代完整的卡池**。具體保障如下。
+
+- 加上 `--no-resume` 的整批重爬會把進度暫存到 `data/cards.fresh.checkpoint.json`，只在完整跑完後才覆寫權威檔案。中途按 Ctrl+C 時 `data/cards.json` 與 checkpoint 保持原狀；暫存檔留在原地供檢查，但**不會**被後續執行自動續用（重跑會從權威 checkpoint 開始）。成功發布後暫存檔會被清除，因為此時它只是過期的子集。
+- 預設（resume）模式的中斷會把進度寫回 `data/cards.checkpoint.json`，重新執行即可續爬。
+- 發布前會比對張數：若結果少於既有 `data/cards.json` 或 checkpoint 的張數（例如只用 `--set`／`--test` 重爬局部卡包，或大量抓取失敗），發布會被拒絕。確認要縮小卡池時，加上 `--allow-shrink` 重跑；在 resume 模式下這不會重抓任何卡片。
+- 空結果永不發布，`--allow-shrink` 也不例外 — 每張都抓取失敗與網站消失無法區分。
+- 權威的 `data/cards.json` 若無法解析，蒐集會直接中止而不是當成 0 張（否則守衛會失效）；checkpoint 無法解析只會失去它的尺寸投票權，並記錄警告，以免卡住重建。
+- 中斷時**不會**寫 `data/failed_urls.json`：部分失敗清單覆蓋權威清單是同一類破壞，而中斷時的失敗清單本來就不耐久（下次執行會重抓那些 URL）。失敗張數仍會出現在中斷訊息中。
+
 
 ```bash
 python -m scraper --test

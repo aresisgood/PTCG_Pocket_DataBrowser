@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
@@ -19,9 +20,45 @@ from .sets import parse_card_urls, parse_sets
 
 Logger = Callable[[str], None]
 
+CATALOG_FILENAME = "cards.json"
+CHECKPOINT_FILENAME = "cards.checkpoint.json"
+FRESH_PROGRESS_FILENAME = "cards.fresh.checkpoint.json"
+FAILURE_FILENAME = "failed_urls.json"
+TEMPORARY_SUFFIX = ".tmp"
+
 
 class CollectionError(RuntimeError):
     """A collection cannot proceed because its persisted state is invalid."""
+
+
+class CollectionInterrupted(KeyboardInterrupt):
+    """The operator stopped collection; whatever was collected is persisted.
+
+    This stays a ``KeyboardInterrupt`` so that an ``except Exception`` added
+    around the workflow later cannot silently swallow an operator's Ctrl+C.
+    """
+
+    def __init__(
+        self,
+        collected_count: int,
+        progress_path: Path | None = None,
+        failure_count: int = 0,
+        *,
+        resumable: bool = False,
+    ) -> None:
+        location = (
+            f"progress saved to {progress_path}"
+            if progress_path is not None
+            else "no progress to save"
+        )
+        super().__init__(
+            f"collection interrupted after {collected_count} new card(s) and "
+            f"{failure_count} failure(s); {location}"
+        )
+        self.collected_count = collected_count
+        self.progress_path = progress_path
+        self.failure_count = failure_count
+        self.resumable = resumable
 
 
 class CardSource(Protocol):
@@ -38,6 +75,7 @@ class CardCollectionOptions:
     only_set: str | None = None
     resume: bool = True
     save_every: int = 50
+    allow_shrink: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +87,7 @@ class CardCollectionSummary:
 class InMemoryCardSource:
     sets: list[dict[str, Any]]
     card_urls: dict[str, list[str]]
-    card_pages: dict[str, str | Exception]
+    card_pages: dict[str, str | BaseException]
 
     def list_sets(self) -> list[dict[str, Any]]:
         return self.sets
@@ -59,7 +97,7 @@ class InMemoryCardSource:
 
     def get_card_page(self, url: str) -> str:
         page = self.card_pages[url]
-        if isinstance(page, Exception):
+        if isinstance(page, BaseException):
             raise page
         return page
 
@@ -108,8 +146,11 @@ class HttpCardSource:
 
 
 def _write_json(path: Path, data: Any) -> None:
+    """Replace ``path`` atomically, so an interrupt cannot truncate it."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    staging = path.with_name(f"{path.name}{TEMPORARY_SUFFIX}")
+    staging.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(staging, path)
 
 
 def _load_checkpoint(path: Path) -> dict[str, CardSchema]:
@@ -125,6 +166,199 @@ def _load_checkpoint(path: Path) -> dict[str, CardSchema]:
         raise CollectionError(f"malformed checkpoint {path}: {exc}") from exc
 
 
+@dataclass(frozen=True, slots=True)
+class _CatalogPaths:
+    """Where one collection run reads and writes its artifacts."""
+
+    catalog: Path
+    checkpoint: Path
+    failures: Path
+    staging: Path
+
+    @classmethod
+    def under(cls, directory: Path) -> "_CatalogPaths":
+        return cls(
+            catalog=directory / CATALOG_FILENAME,
+            checkpoint=directory / CHECKPOINT_FILENAME,
+            failures=directory / FAILURE_FILENAME,
+            staging=directory / FRESH_PROGRESS_FILENAME,
+        )
+
+
+@dataclass(slots=True)
+class _CollectionProgress:
+    """Accumulated state of a single collection run.
+
+    Deliberately mutable, unlike ``_CatalogPaths``: the gathering loop has to
+    leave partial state behind that survives a ``KeyboardInterrupt``, and
+    copying the card dictionary per card would make a 3900-card run quadratic.
+    """
+
+    collected: dict[str, CardSchema]
+    failures: list[CollectionFailure] = field(default_factory=list)
+    collected_count: int = 0
+    skipped_count: int = 0
+
+    def as_artifact(self) -> list[dict[str, Any]]:
+        return [card.to_dict() for card in self.collected.values()]
+
+
+def _select_sets(
+    sets: list[dict[str, Any]], options: CardCollectionOptions
+) -> list[dict[str, Any]]:
+    if options.only_set:
+        return [item for item in sets if item["set_id"] == options.only_set]
+    if options.test_mode:
+        return sets[:2]
+    return sets
+
+
+def _gather_cards(
+    options: CardCollectionOptions,
+    source: CardSource,
+    sets: list[dict[str, Any]],
+    progress: _CollectionProgress,
+    save: Callable[[], Path],
+) -> None:
+    processed_since_save = 0
+    for set_info in sets:
+        set_id = set_info["set_id"]
+        try:
+            urls = source.list_card_urls(set_id)
+        except FetchError as exc:
+            progress.failures.append(
+                CollectionFailure(f"{set_id} (set page)", str(exc))
+            )
+            continue
+        for url in urls:
+            if url in progress.collected:
+                progress.skipped_count += 1
+                continue
+            try:
+                card = parse_card_page(source.get_card_page(url), url)
+                validate_card(card)
+            except (FetchError, CardValidationError) as exc:
+                progress.failures.append(CollectionFailure(url, str(exc)))
+                continue
+            progress.collected[url] = card
+            progress.collected_count += 1
+            processed_since_save += 1
+            if processed_since_save >= options.save_every:
+                save()
+                processed_since_save = 0
+
+
+def _card_count(path: Path) -> int:
+    """Count the cards in a published artifact, refusing to guess if unreadable."""
+    if not path.exists():
+        return 0
+    try:
+        published = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise CollectionError(
+            f"cannot read {path} to size the existing catalog: {exc}. "
+            "Repair it or move it aside before collecting."
+        ) from exc
+    if not isinstance(published, list):
+        raise CollectionError(
+            f"cannot read {path} to size the existing catalog: expected a list, "
+            f"found {type(published).__name__}."
+        )
+    return len(published)
+
+
+def _catalog_floor(paths: _CatalogPaths, log: Logger) -> int:
+    """The card count a new catalog must not fall below.
+
+    The published catalog is authoritative, so an unreadable one stops the run.
+    The checkpoint is working state that a fresh rebuild is meant to replace, so
+    an unreadable one only loses its vote - loudly, never silently.
+    """
+    floor = _card_count(paths.catalog)
+    try:
+        return max(floor, _card_count(paths.checkpoint))
+    except CollectionError as exc:
+        log(f"warning: unreadable checkpoint ignored while sizing the catalog: {exc}")
+        return floor
+
+
+def _refuse_publication(
+    progress: _CollectionProgress,
+    paths: _CatalogPaths,
+    options: CardCollectionOptions,
+    reason: str,
+) -> CollectionError:
+    """Keep the collected cards reachable, then explain how to proceed.
+
+    In resume mode the landing spot is the canonical checkpoint: ``collected``
+    started from it and only ever grew, so writing it back cannot shrink it, and
+    a re-run then skips every card this run already fetched.
+    """
+    landing = paths.checkpoint if options.resume else paths.staging
+    if progress.collected:
+        _write_json(landing, progress.as_artifact())
+    recovery = (
+        f"The {progress.collected_count} collected card(s) are in {landing}, so "
+        "a re-run resumes from there."
+        if options.resume
+        else f"The {progress.collected_count} collected card(s) are staged in "
+        f"{landing} for inspection; a re-run collects them again."
+    )
+    return CollectionError(f"{reason} {recovery}")
+
+
+def _publish_catalog(
+    progress: _CollectionProgress,
+    paths: _CatalogPaths,
+    options: CardCollectionOptions,
+    log: Logger,
+) -> CollectionResult[CardCollectionSummary]:
+    artifact_cards = progress.as_artifact()
+    # An empty catalog is never a legitimate result, so --allow-shrink cannot
+    # license one: every fetch failing looks identical to the site disappearing.
+    if not artifact_cards:
+        raise _refuse_publication(
+            progress,
+            paths,
+            options,
+            f"refusing to publish an empty catalog to {paths.catalog} after "
+            f"{len(progress.failures)} failure(s).",
+        )
+
+    # A scoped re-scrape (--set/--test), or a run that lost cards to failures,
+    # would otherwise publish a fraction of the catalog over the whole of it.
+    floor = _catalog_floor(paths, log)
+    if len(artifact_cards) < floor and not options.allow_shrink:
+        raise _refuse_publication(
+            progress,
+            paths,
+            options,
+            f"refusing to shrink {paths.catalog} from {floor} to "
+            f"{len(artifact_cards)} card(s). Re-run with --allow-shrink to "
+            "publish anyway, or without --set/--test to collect the full catalog.",
+        )
+
+    _write_json(paths.checkpoint, artifact_cards)
+    _write_json(paths.catalog, artifact_cards)
+    _write_json(paths.failures, [failure.item_id for failure in progress.failures])
+    paths.staging.unlink(missing_ok=True)
+    log(
+        f"done: {len(artifact_cards)} cards, {len(progress.failures)} failure(s) "
+        f"-> {paths.catalog}"
+    )
+    return CollectionResult(
+        collected_count=progress.collected_count,
+        skipped_count=progress.skipped_count,
+        failures=progress.failures,
+        artifacts={
+            "catalog": paths.catalog,
+            "checkpoint": paths.checkpoint,
+            "failures": paths.failures,
+        },
+        summary=CardCollectionSummary(cards=list(progress.collected.values())),
+    )
+
+
 def collect_card_catalog(
     options: CardCollectionOptions,
     source: CardSource,
@@ -132,62 +366,41 @@ def collect_card_catalog(
     *,
     log: Logger = print,
 ) -> CollectionResult[CardCollectionSummary]:
-    output_path = output_directory / "cards.json"
-    checkpoint_path = output_directory / "cards.checkpoint.json"
-    failure_path = output_directory / "failed_urls.json"
-    collected = _load_checkpoint(checkpoint_path) if options.resume else {}
-
-    sets = source.list_sets()
-    if options.only_set:
-        sets = [item for item in sets if item["set_id"] == options.only_set]
-    elif options.test_mode:
-        sets = sets[:2]
-
-    failures: list[CollectionFailure] = []
-    collected_count = 0
-    skipped_count = 0
-    processed_since_save = 0
-    for set_info in sets:
-        set_id = set_info["set_id"]
-        try:
-            urls = source.list_card_urls(set_id)
-        except FetchError as exc:
-            failures.append(CollectionFailure(f"{set_id} (set page)", str(exc)))
-            continue
-        for url in urls:
-            if url in collected:
-                skipped_count += 1
-                continue
-            try:
-                card = parse_card_page(source.get_card_page(url), url)
-                validate_card(card)
-            except (FetchError, CardValidationError) as exc:
-                failures.append(CollectionFailure(url, str(exc)))
-                continue
-            collected[url] = card
-            collected_count += 1
-            processed_since_save += 1
-            if processed_since_save >= options.save_every:
-                _write_json(
-                    checkpoint_path,
-                    [card.to_dict() for card in collected.values()],
-                )
-                processed_since_save = 0
-
-    cards = list(collected.values())
-    artifact_cards = [card.to_dict() for card in cards]
-    _write_json(checkpoint_path, artifact_cards)
-    _write_json(output_path, artifact_cards)
-    _write_json(failure_path, [failure.item_id for failure in failures])
-    log(f"done: {len(cards)} cards, {len(failures)} failure(s) -> {output_path}")
-    return CollectionResult(
-        collected_count=collected_count,
-        skipped_count=skipped_count,
-        failures=failures,
-        artifacts={
-            "catalog": output_path,
-            "checkpoint": checkpoint_path,
-            "failures": failure_path,
-        },
-        summary=CardCollectionSummary(cards=cards),
+    paths = _CatalogPaths.under(output_directory)
+    # A fresh run stages progress beside the canonical checkpoint instead of
+    # inside it, so an interrupted re-scrape can never replace a complete
+    # catalog with the handful of cards it managed to fetch.
+    progress_path = paths.checkpoint if options.resume else paths.staging
+    progress = _CollectionProgress(
+        collected=_load_checkpoint(paths.checkpoint) if options.resume else {}
     )
+
+    def save_progress() -> Path:
+        _write_json(progress_path, progress.as_artifact())
+        return progress_path
+
+    try:
+        _gather_cards(
+            options,
+            source,
+            _select_sets(source.list_sets(), options),
+            progress,
+            save_progress,
+        )
+    except KeyboardInterrupt:
+        staged = save_progress() if progress.collected else None
+        log(
+            f"interrupted: {progress.collected_count} new card(s), "
+            f"{len(progress.failures)} failure(s); "
+            f"{'staged in ' + str(staged) if staged else 'nothing written'}; "
+            f"{paths.catalog} left untouched"
+        )
+        # The operator chose to stop, so the original traceback adds nothing.
+        raise CollectionInterrupted(
+            progress.collected_count,
+            staged,
+            len(progress.failures),
+            resumable=options.resume,
+        ) from None
+
+    return _publish_catalog(progress, paths, options, log)
